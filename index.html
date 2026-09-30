@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Molding Predictive Quality</title>
+  <style>
+    :root { --brand: #3D5166; --accent: #6B8FA8; --text: #222222; --muted: #666666; --line: #EEEEEE; --bg: #FFFFFF; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+      background: var(--bg); color: var(--text); font-size: 16px; line-height: 1.6; }
+    .page-header { background: var(--brand); color: #fff; padding: 22px 40px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; }
+    .page-header .sub { font-size: 14px; opacity: 0.85; margin-top: 3px; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 36px 40px 72px; }
+    .intro { font-size: 16px; color: #333; margin-bottom: 28px; }
+    .card { display: block; text-decoration: none; color: inherit; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+      border-radius: 4px; padding: 16px 20px; margin-bottom: 14px; }
+    .card:hover { box-shadow: 0 2px 10px rgba(61,81,102,0.10); border-left-color: var(--brand); }
+    .num { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+    .title { font-size: 17px; font-weight: 700; color: var(--brand); }
+    .desc { font-size: 14px; color: var(--muted); margin-top: 5px; }
+    .foot { margin-top: 30px; font-size: 13px; color: #999; border-top: 1px solid var(--line); padding-top: 16px; }
+    @media (max-width: 640px) { .wrap, .page-header { padding-left: 16px; padding-right: 16px; } }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Cavity Pressure Monitoring and Predictive Quality</h1>
+    <div class="sub">An injection molder's instrumented cell: every shot retained, charted and measured, from the monitoring units to the quality dashboard.</div>
+  </div>
+  <div class="wrap">
+    <p class="intro">Two presses, IM-11 and IM-12, run six molds with cavity pressure sensors. The platform joins the monitoring units' per-shot
+      values to the MES, the resin lots, the setpoint log, the audits and the scrap tallies; runs the shop's control-chart rules on every shot;
+      adds drift detection; and puts a predicted weight and dimension and an anomaly state on every shot.</p>
+    <a class="card" href="docs/reports/unit_screen.html"><div class="num">01</div><div class="title">Monitoring unit screen and shift chart</div>
+      <div class="desc">Cycle graph against template, summary values with bands, alarm and sort state, predicted weight and dimension, anomaly state; the shift chart, the alarm and sort log and the reject-bin review sheet.</div></a>
+    <a class="card" href="docs/reports/dashboard.html"><div class="num">02</div><div class="title">Quality dashboard</div>
+      <div class="desc">Plant scrap by press, mold and code on all 24 presses; the cell's alarms by layer, drift signals, sort and false rejects, measurement error against gauge, label maturity and linkage coverage.</div></a>
+    <a class="card" href="docs/reports/ml_overview.html"><div class="num">03</div><div class="title">ML overview</div>
+      <div class="desc">For the quality manager: what the units already caught, what charting every shot added, drift detection, the per-shot measurement, the supervised attempt, the anomaly layer, the layer comparison and the alarm budget.</div></a>
+    <a class="card" href="docs/reports/ml_technical.html"><div class="num">04</div><div class="title">ML technical report</div>
+      <div class="desc">The curve model and its mechanisms, sensor realism, label design, the realism checks, the feature pipeline, each model's evaluation and ablations, mechanism recovery.</div></a>
+    <a class="card" href="docs/reports/monitoring_report.html"><div class="num">05</div><div class="title">MLOps monitoring</div>
+      <div class="desc">Label maturity, alarm-rate drift per layer, expected feature shifts after equipment events, and the per-shot measurement tracked against each audit with its retraining rule.</div></a>
+    <div class="foot">Built from dbt marts on DuckDB; models tracked in MLflow. Source and pipeline in the repository.</div>
+  </div>
+</body>
+</html>

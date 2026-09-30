@@ -1,0 +1,10 @@
+molding_quality:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: molding.duckdb
+      threads: 2
+      settings:
+        memory_limit: "4GB"
+        preserve_insertion_order: false

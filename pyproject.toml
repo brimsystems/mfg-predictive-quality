@@ -1,0 +1,28 @@
+[project]
+name = "mfg-predictive-quality"
+version = "0.1.0"
+description = "Cavity pressure monitoring, SPC and predictive quality for an injection molding cell"
+requires-python = ">=3.11"
+
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "pyarrow>=15.0",
+    "duckdb>=1.1",
+    "dbt-core>=1.8",
+    "dbt-duckdb>=1.8",
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "mlflow>=2.12",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["data_source*", "ml*"]

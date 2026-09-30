@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: fct_shot
+    description: One row per shot on the instrumented cell (IM-11, IM-12).
+    columns:
+      - name: shot_id
+        tests: [unique, not_null]
+      - name: job_id
+        tests: [not_null]
+  - name: fct_audit_piece
+    description: Audit pieces with their shot's features where the robot recorded the sampled cycle.
+  - name: fct_job
+    columns:
+      - name: job_id
+        tests: [unique, not_null]
+  - name: fct_job_hour
+  - name: fct_confirmed_defects
+    columns:
+      - name: source
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['sort', 'audit', 'tally', 'return']
+  - name: mart_plant_scrap
+  - name: mart_plant_output

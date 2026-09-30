@@ -1,0 +1,5 @@
+resin_id,mfi_nominal,mfi_band_low,mfi_band_high,hygroscopic,min_residence_h
+PA66 GF30,12.0,9.0,15.0,true,4.0
+PC/ABS,18.0,14.0,22.0,true,3.0
+POM,9.0,7.5,10.5,false,0.0
+PP copolymer,20.0,16.0,24.0,false,0.0

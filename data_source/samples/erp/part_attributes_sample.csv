@@ -1,0 +1,7 @@
+part_id,mold_id,description,customer_id,program,resin,cavities,nominal_weight_g,critical_dimension_mm,dimension_tolerance_mm,nominal_wall_mm,class_a_cosmetic,has_weld_line,flat_housing,gauge_sd_weight_g,gauge_sd_dimension_mm,standard_cost
+P-40411,M-2041,Automotive connector housing,Customer D,automotive,PA66 GF30,8,6.4,24.6,0.08,1.0,False,False,False,0.0115,0.004,0.617
+P-40431,M-2043,"Automotive connector housing, mating half",Customer D,automotive,PA66 GF30,8,7.1,26.2,0.08,1.0,False,False,False,0.0128,0.004,0.67
+P-21181,M-2118,"Medical device housing, front",Customer M,medical,PC/ABS,4,38.5,112.4,0.15,1.4,True,True,True,0.0693,0.0075,2.172
+P-21191,M-2119,"Medical device housing, rear",Customer M,medical,PC/ABS,4,41.2,112.4,0.15,1.4,True,True,True,0.0742,0.0075,2.339
+P-22601,M-2260,Automotive trim clip,Customer R,automotive,POM,16,2.15,18.0,0.1,0.9,False,False,False,0.0039,0.005,0.228
+P-23011,M-2301,Fluid-handling manifold,Customer F,industrial,PP copolymer,2,88.0,140.0,0.3,3.2,False,True,False,0.1584,0.015,6.006

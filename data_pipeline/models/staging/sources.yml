@@ -1,0 +1,97 @@
+version: 2
+
+# Every source reads the raw extract in place. The per-shot tables are Parquet
+# partitioned by month (and by mold for curves); the rest are CSV.
+sources:
+  - name: monitoring
+    description: Cavity pressure monitoring units on IM-11 and IM-12
+    tables:
+      - name: cavity_shot_summary
+        meta:
+          external_location: "read_parquet('{{ var('raw_dir') }}/monitoring/cavity_shot_summary/*/*.parquet', hive_partitioning = true)"
+      - name: cavity_curves
+        meta:
+          external_location: "read_parquet('{{ var('raw_dir') }}/monitoring/cavity_curves/*/*/*.parquet', hive_partitioning = true)"
+      - name: templates
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/monitoring/templates.csv', header = true)"
+  - name: mes
+    tables:
+      - name: machine_shot_data
+        meta:
+          external_location: "read_parquet('{{ var('raw_dir') }}/mes/machine_shot_data/*/*.parquet', hive_partitioning = true)"
+      - name: presses
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/mes/presses.csv', header = true)"
+  - name: erp
+    tables:
+      - name: production_orders
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/erp/production_orders.csv', header = true)"
+      - name: part_attributes
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/erp/part_attributes.csv', header = true)"
+  - name: qms
+    tables:
+      - name: setpoint_changes
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/setpoint_changes.csv', header = true)"
+      - name: first_shot_approvals
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/first_shot_approvals.csv', header = true, all_varchar = true)"
+      - name: qc_audits
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/qc_audits.csv', header = true)"
+      - name: qc_audit_pieces
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/qc_audit_pieces.csv', header = true)"
+      - name: sort_dispositions
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/sort_dispositions.csv', header = true)"
+      - name: scrap_tallies
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/scrap_tallies.csv', header = true)"
+      - name: customer_returns
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/customer_returns.csv', header = true)"
+      - name: inspection_records
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/inspection_records.csv', header = true)"
+      - name: scrap_events
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/qms/scrap_events.csv', header = true)"
+  - name: materials
+    tables:
+      - name: resin_lots
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/materials/resin_lots.csv', header = true)"
+      - name: material_loads
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/materials/material_loads.csv', header = true)"
+      - name: dryer_log
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/materials/dryer_log.csv', header = true)"
+  - name: toolroom
+    tables:
+      - name: mold_maintenance
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/toolroom/mold_maintenance.csv', header = true)"
+      - name: equipment_service
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/toolroom/equipment_service.csv', header = true)"
+  - name: engineering
+    tables:
+      - name: process_sheets
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/engineering/process_sheets.csv', header = true)"
+  - name: hr
+    tables:
+      - name: technicians
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/hr/technicians.csv', header = true)"
+      - name: inspectors
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/hr/inspectors.csv', header = true)"
+      - name: operators
+        meta:
+          external_location: "read_csv_auto('{{ var('raw_dir') }}/hr/operators.csv', header = true)"

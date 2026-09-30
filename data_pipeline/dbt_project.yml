@@ -1,0 +1,29 @@
+name: 'molding_quality'
+version: '1.0.0'
+profile: 'molding_quality'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  raw_dir: "../data_source/raw"
+  snapshot_date: "2026-04-30"
+  maturity_days: 21
+  spc_baseline_shots: 500
+
+models:
+  molding_quality:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    spc:
+      +materialized: table
+    marts:
+      +materialized: table

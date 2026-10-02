@@ -49,7 +49,10 @@ def load():
         from fct_shot""").iloc[0].to_dict()
     R["shots"] = s
     R["sort"] = q("""
-        select count(*) as reviewed, avg((pieces_confirmed_defective = 0)::int) as false_reject_share,
+        select count(*) filter (where review_mode = 'indexed_tray') as tray_reviews,
+               count(*) filter (where review_mode = 'per_shift') as shift_reviews,
+               avg((pieces_confirmed_defective = 0)::int) filter (where review_mode = 'indexed_tray') as false_reject_share,
+               sum(pieces_good) / sum(pieces_reviewed) as pieces_found_good_share,
                sum(pieces_confirmed_defective) as confirmed_pieces, sum(pieces_reviewed) as reviewed_pieces
         from stg_qms__sort_dispositions""").iloc[0].to_dict()
     R["confirmed"] = q("""

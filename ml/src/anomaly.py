@@ -46,27 +46,41 @@ def change_features(df):
     return out.reindex(df.index)
 
 
+MONITOR_FROM = 500                # like the control charts, monitoring starts once setup has converged
+PERSIST = (2, 10)                 # an alarm: two flags in the last ten shots
+
+
+def alarm_state(flags, jobs):
+    """Two flags in the last ten shots of the same job."""
+    k, n = PERSIST
+    return flags.groupby(jobs).transform(lambda x: x.rolling(n, min_periods=1).sum() >= k).astype(bool)
+
+
 def isolation_forest(df, feats=None, seed=11, X_all=None):
+    """Returns the score per shot and the alarm state per shot. The threshold is set so the alarm state (two flags in
+    ten shots) covers FLAG_RATE of validated steady-state shots in the training window."""
     X_all = change_features(df) if X_all is None else X_all
     feats = list(X_all.columns)
     df = df.join(X_all, rsuffix="_x") if feats[0] not in df.columns else df
-    out = pd.Series(np.nan, index=df.index)
-    thr = {}
-    for cell, g in df[df["after_approval"]].groupby("cell"):
+    score = pd.Series(np.nan, index=df.index)
+    alarm = pd.Series(False, index=df.index)
+    mon = df["after_approval"] & (df["shots_since_approval"] >= MONITOR_FROM)
+    for cell, g in df[mon].sort_values("shot_ts").groupby("cell"):
         fit = g[(g["split"] == "train") & validated(g)]
         if len(fit) < 1000:
             continue
-        fit = fit.sample(min(FIT_CAP, len(fit)), random_state=seed)
-        X = fit[feats].fillna(0).to_numpy()
-        m = IsolationForest(n_estimators=200, max_samples=4096, random_state=seed, n_jobs=2).fit(X)
-        s_fit = -m.score_samples(X)
-        thr[cell] = float(np.quantile(s_fit, 1 - FLAG_RATE))
-        out[g.index] = -m.score_samples(g[feats].fillna(0).to_numpy())
-    flag = pd.Series(False, index=df.index)
-    for cell, t in thr.items():
-        ix = df.index[(df["cell"] == cell) & out.notna()]
-        flag[ix] = out[ix] > t
-    return out, flag
+        fs = fit.sample(min(FIT_CAP, len(fit)), random_state=seed)
+        m = IsolationForest(n_estimators=200, max_samples=4096, random_state=seed, n_jobs=2).fit(fs[feats].fillna(0).to_numpy())
+        sc = pd.Series(-m.score_samples(g[feats].fillna(0).to_numpy()), index=g.index)
+        score[g.index] = sc
+        calib = (g["split"] == "train") & validated(g)
+        lo, hi = float(sc[calib].quantile(0.90)), float(sc.max())
+        for _ in range(30):                                  # bisection on the alarm-state rate
+            t = (lo + hi) / 2
+            rate = alarm_state(sc > t, g["job_id"])[calib].mean()
+            lo, hi = (t, hi) if rate > FLAG_RATE else (lo, t)
+        alarm[g.index] = alarm_state(sc > hi, g["job_id"])
+    return score, alarm
 
 
 def load_curves(shot_ids, mold_id):

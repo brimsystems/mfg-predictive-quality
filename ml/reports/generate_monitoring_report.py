@@ -26,8 +26,8 @@ def maturity():
     d = RS.q("""
         with j as (select job_id, last_shot_ts from fct_job),
         e as (
-            select s.job_id, r.reviewed_ts as known_ts, r.pieces_confirmed_defective as qty
-            from stg_qms__sort_dispositions r join fct_shot s using (shot_id)
+            select r.job_id, r.reviewed_ts as known_ts, r.pieces_confirmed_defective as qty
+            from stg_qms__sort_dispositions r
             union all select job_id, entered_ts, qty from stg_qms__scrap_tallies
             union all select a.job_id, a.audit_ts, 1 from int_audit_pieces_linked a where a.defect_code is not null
             union all select attributed_job_id, received_date, qty from stg_qms__customer_returns where attributed_job_id is not null)

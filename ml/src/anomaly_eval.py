@@ -33,7 +33,7 @@ def evaluate(df, flags, ae=None):
     con = connect()
     # the shop's first response: a sorted shot reviewed, a tally entered, or a setpoint change
     conf = con.execute("""
-        select s.job_id, r.reviewed_ts as ts from stg_qms__sort_dispositions r join fct_shot s using (shot_id)
+        select r.job_id, r.reviewed_ts as ts from stg_qms__sort_dispositions r
         where r.pieces_confirmed_defective > 0
         union all
         select job_id, entered_ts from stg_qms__scrap_tallies""").df()

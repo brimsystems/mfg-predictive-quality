@@ -4,7 +4,7 @@
                ('s.pg_cooling_rate', 'pg_cooling_rate_rel'), ('s.pg_cycle_integral', 'pg_cycle_integral_rel'),
                ('c.fill_time_s', 'fill_time_rel'), ('c.recovery_time_s', 'recovery_time_rel'),
                ('c.peak_injection_pressure_bar', 'peak_injection_pressure_rel'),
-               ('c.switchover_pressure_bar', 'switchover_pressure_rel')] %}
+               ('c.switchover_pressure_bar', 'switchover_pressure_rel'), ('c.cycle_time_s', 'cycle_time_rel')] %}
 with job_ref as (
     -- values with no template band are taken relative to the job's first 500 production shots
     select c.job_id,
@@ -16,8 +16,10 @@ with job_ref as (
     group by 1
 ),
 sort_rev as (
-    select shot_id, pieces_reviewed, pieces_confirmed_defective, defect_codes as sort_defect_codes, reviewed_ts
+    -- only the indexed-tray reviews (medical molds) are tied to a shot
+    select shot_id, pieces_reviewed, pieces_confirmed_defective, defect_code_list as sort_defect_codes, reviewed_ts
     from {{ ref('stg_qms__sort_dispositions') }}
+    where review_mode = 'indexed_tray'
 ),
 audit as (
     select shot_id,
@@ -69,7 +71,7 @@ select
     coalesce(f.spc_we5, false) as spc_we5, coalesce(f.spc_mr, false) as spc_mr, coalesce(f.spc_any, false) as spc_any,
     f.spc_max_abs_z,
     d.ewma_pack, d.ewma_fill, d.cusum_eof, d.cusum_gate_seal, d.cusum_pack_var,
-    coalesce(d.drift_any_signal, false) as drift_any_signal,
+    coalesce(d.drift_any_signal, false) as drift_any_signal, coalesce(d.drift_any_fire, false) as drift_any_fire,
     -- labels linked to the shot
     r.pieces_reviewed, r.pieces_confirmed_defective, r.sort_defect_codes,
     a.audit_pieces, a.audit_rejects, a.audit_defect_codes

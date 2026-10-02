@@ -60,6 +60,40 @@ def mechanism_curves():
     return img(f, "vent restriction")
 
 
+def img_wrap(x):
+    return x
+
+
+def capability_comparison(R):
+    """Critical-dimension capability per test-period run: from the hourly audits, from the predicted dimension on every
+    shot, and from the prediction corrected for model error. Uses Ppk (overall spread) throughout so the three compare."""
+    from ml.src import vm
+    from ml.src.features import VALID_END
+    parts = R["parts"].set_index("mold_id")
+    jobs = RS.q(f"select job_id, mold_id, press_id from fct_job where first_shot_ts >= '{VALID_END.date()}'")
+    vmm = R["vm"][(R["vm"]["design"] == "pooled") & (R["vm"]["target"] == "dimension")].groupby("cell")[["rmse", "gauge_sd"]].mean()
+    rows = []
+    for j in jobs.itertuples():
+        p = parts.loc[j.mold_id]
+        nom, tol = p["critical_dimension_mm"], p["dimension_tolerance_mm"]
+        a = RS.q(f"""select p.dimension_1 as d from stg_qms__qc_audit_pieces p join stg_qms__qc_audits a using (audit_id)
+                     where a.job_id = '{j.job_id}'""")["d"]
+        sh = RS.q(f"select * from fct_shot where job_id = '{j.job_id}' and after_approval")
+        if len(a) < 30 or sh.empty:
+            continue
+        pr = vm.predict_shots(sh, "dimension")
+        pr = pr[pr["cavity_id"] <= pr["shot_id"].map(sh.set_index("shot_id")["active_cavities"])]
+        d = nom + pr["y"] * tol
+        cell = f"{j.mold_id} / {j.press_id}"
+        err_var = max(vmm.loc[cell, "rmse"] ** 2 - vmm.loc[cell, "gauge_sd"] ** 2, 0.0)
+        ppk = lambda mu, sd: min(nom + tol - mu, mu - nom + tol) / (3 * sd)
+        s_corr = float(np.sqrt(d.var() + err_var))
+        rows.append(dict(job=j.job_id, cell=cell, audit_n=len(a), ppk_audit=ppk(a.mean(), a.std()), shots=len(sh), pieces=len(d),
+                         ppk_pred=ppk(d.mean(), d.std()), ppk_pred_corr=ppk(d.mean(), s_corr),
+                         sd_audit=a.std(), sd_pred=d.std(), sd_corr=s_corr, gauge=vmm.loc[cell, "gauge_sd"]))
+    return pd.DataFrame(rows)
+
+
 def main():
     R = RS.load()
     S = R["shots"]
@@ -171,6 +205,38 @@ def main():
     rs = R["lot_steps"]
     rs3 = rs.assign(rs3=rs["supplier_id"] == "RS-3").groupby("rs3")["fill_step"].mean()
 
+    cc = capability_comparison(R)
+    infl = float((cc["ppk_pred"] > cc["ppk_audit"]).mean()) if len(cc) else float("nan")
+    ratio_sd = float((cc["sd_pred"] / cc["sd_audit"]).median()) if len(cc) else float("nan")
+    gap_raw = float((cc["ppk_pred"] - cc["ppk_audit"]).median()) if len(cc) else float("nan")
+    gap_corr = float((cc["ppk_pred_corr"] - cc["ppk_audit"]).median()) if len(cc) else float("nan")
+    cct = cc.assign(**{c: cc[c].map(lambda v: f"{v:.2f}") for c in ("ppk_audit", "ppk_pred", "ppk_pred_corr")},
+                    pieces=cc["pieces"].map(lambda v: f"{v:,.0f}"))[["job", "cell", "audit_n", "ppk_audit", "pieces", "ppk_pred", "ppk_pred_corr"]]
+    cct.columns = ["Job", "Mold / press", "Audit pieces", "Ppk, audits", "Predicted pieces", "Ppk, prediction", "Ppk, prediction corrected"]
+    f, ax = fig(3.4, 5.4)
+    ax.scatter(cc["ppk_audit"], cc["ppk_pred"], color=GREY, s=18, label="prediction, uncorrected")
+    ax.scatter(cc["ppk_audit"], cc["ppk_pred_corr"], color=BRAND_BLUE, s=18, label="prediction, corrected for model error")
+    lim = [0, max(4.0, float(cc[["ppk_audit", "ppk_pred"]].max().max()) * 1.05)] if len(cc) else [0, 4]
+    ax.plot(lim, lim, color="#999", lw=0.8)
+    ax.set_xlabel("Ppk from the hourly audits")
+    ax.set_ylabel("Ppk from the predicted dimension")
+    ax.legend(frameon=False, fontsize=8.5)
+    cap_png = img(f, "capability comparison")
+    dominant = "smoothing" if gap_raw > 0 else "model error"
+    cap_section = f"""<h2 id="capability">10a. Capability from audits and from the prediction</h2>
+<p>Two estimates of the critical dimension's capability for each run in the test period, as a method comparison: the customer receives the
+audit-based figure. The audit estimate rests on a small measured sample (gauge noise included). The prediction estimate covers every piece of every shot,
+but it carries model error. Two effects pull it in opposite directions: the regression smooths, so predictions spread less than the parts do and Ppk comes
+out too high; model error and any offset in the predicted mean pull it the other way. Here smoothing dominates: predictions spread
+{ratio_sd * 100:.0f}% as much as the audits (median), and the uncorrected prediction Ppk exceeds the audit Ppk on {pct(infl, 0)} of runs (median gap
+{gap_raw:+.2f}).</p>
+<p>A clean correction exists because the regression is calibrated (slope near 1), so its error is uncorrelated with its prediction: the parts' true spread
+is the prediction's spread plus the model's error variance. The error variance is the test-period error against the gauge with the gauge's own variance
+removed (RMSE squared minus gauge sd squared, per mold and press). After the correction the median gap to the audit Ppk is {gap_corr:+.2f}; what remains
+is mostly the gauge noise that the audit estimate carries and the corrected prediction does not.</p>
+{img_wrap(cap_png)}
+<p class="caption">Uncorrected predictions overstate capability; the correction brings them close to the audit figures.</p>
+{table(cct)}"""
     body = f"""
 <div class="note">The data behind this report is generated by a physical model of the cell (section 1). It validates the pipeline, the label
 design and the evaluation; it does not show how the models would transfer to another press, mold or plant.</div>
@@ -201,9 +267,11 @@ Measured on the extract: {pct(RS.check(R, 'summary rows dropped')['value'], 2)} 
 
 <h2 id="labels">3. Label design</h2>
 <p>Labels come from the shop's own inspection processes over the true quality of each piece, with their coverage and noise: the reject-bin review
-of every sorted shot, hourly audits of {LABELS['audit_pieces'][0]} to {LABELS['audit_pieces'][1]} pieces ({pct(R['audits']['linked'], 0)} linked
+(per sorted shot through an indexed tray on the medical molds M-2118 and M-2119; once per shift by job, with no shot, on the other four), hourly audits of {LABELS['audit_pieces'][0]} to {LABELS['audit_pieces'][1]} pieces ({pct(R['audits']['linked'], 0)} linked
 to a shot through the robot's recorded cycle), packing tallies by hour and code, and customer returns weeks later. A job's quality is taken as known
-{LABELS['maturity_days']} days after its last shot. Confirmed defective pieces by code and source:</p>
+{LABELS['maturity_days']} days after its last shot. Because only the medical molds' reviews and the robot-linked audits are tied to a shot,
+shot-level figures in this report (the supervised model's labels, shot-level catch) mostly reflect the medical molds. Confirmed defective pieces by code
+and source:</p>
 {table(codes, {c: (lambda v: f'{v:,.0f}') for c in codes.columns if c != 'code'})}
 
 <h2 id="checks">4. Realism checks</h2>
@@ -265,12 +333,13 @@ from quality engineering's event log.</p>
 {table(bm)}
 <p>{L['n_defects']:,} confirmed defective pieces in the test period, {L['n_dimensional']:,} of them dimensional.</p>
 
+{cap_section}
 <h2 id="mechanisms">11. Mechanism recovery</h2>
 <p>Each mechanism's signature, measured on the extract the way the platform sees it:</p>
 {table(ct[ct['Check'].isin(['4', '10'])])}
 """
     toc = [("model", "Model"), ("sensors", "Sensors"), ("labels", "Labels"), ("checks", "Checks"), ("features", "Features"), ("spc", "SPC"),
-           ("vm", "Virtual metrology"), ("supervised", "Supervised"), ("anomaly", "Anomaly"), ("layers", "Layers"), ("mechanisms", "Mechanisms")]
+           ("vm", "Virtual metrology"), ("supervised", "Supervised"), ("anomaly", "Anomaly"), ("layers", "Layers"), ("capability", "Capability"), ("mechanisms", "Mechanisms")]
     OUT.write_text(shell("Cavity Pressure ML Technical Report", "Molding quality · IM-11 and IM-12",
                          f"{S['shots']:,.0f} shots, {S['jobs']} jobs · January 2025 to March 2026", body, toc), encoding="utf-8")
     print("wrote", OUT)

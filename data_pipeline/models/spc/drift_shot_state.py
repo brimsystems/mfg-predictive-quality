@@ -10,6 +10,11 @@ Drift detection on every shot after approval, per job.
 The baseline for each job is its first 500 shots after approval. Statistics reset
 at approval, at documented drift-correction changes, at vent cleaning, PM and ring
 replacement, and restart at a resin lot change.
+
+Deployed limits: every limit is scaled by SCALE. After a detector fires, a new excursion of the same detector within
+REARM shots counts as the same investigation and is not signaled again, unless a reset (a correction, maintenance or a
+lot change) comes between. Each detector carries its signaling shots (the excursion, as on the chart) and its firing
+events (the first shot of each signaled excursion).
 """
 import numpy as np
 import pandas as pd
@@ -19,6 +24,32 @@ BLOCK = 25
 K = 0.375
 H = 5.0
 BASE = 500
+EWMA_L = 3.5
+VAR_K, VAR_H = 0.10, 1.2
+SCALE = 1.0
+REARM = 3000                     # deployed: one investigation per detector per 3,000 shots unless reset
+DETECTORS = ("ewma_pack", "ewma_fill", "cusum_eof", "cusum_gate_seal", "cusum_pack_var")
+
+
+def _rearm(sig, resets, rearm):
+    """Keep excursions (runs of signaling shots) that start at least `rearm` shots after the last kept start, or after
+    a reset. Returns (signaling shots kept, firing events)."""
+    keep, fire = np.zeros(len(sig), bool), np.zeros(len(sig), bool)
+    last, i, n = -10 ** 9, 0, len(sig)
+    rs = np.cumsum(resets)
+    while i < n:
+        if not sig[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and sig[j + 1]:
+            j += 1
+        if rearm <= 0 or i - last >= rearm or (last >= 0 and rs[i] > rs[last]):
+            keep[i:j + 1] = True
+            fire[i] = True
+            last = i
+        i = j + 1
+    return keep, fire
 
 
 def _cusum(x, k, h, side, resets):
@@ -66,7 +97,7 @@ def _job(g):
         mu = np.nanmean(e[:BASE])
         sd = np.nanstd(e[:BASE]) or 1.0
         res[f"ewma_{name}"] = e
-        res[f"ewma_{name}_signal"] = np.abs(e - mu) > 3.5 * sd
+        res[f"ewma_{name}_signal"] = np.abs(e - mu) > EWMA_L * SCALE * sd
 
     def blocks(col):
         v = g[col].to_numpy(float)
@@ -80,11 +111,11 @@ def _job(g):
         return z
 
     ze = blocks("eof_pressure_dev") if g["eof_pressure_dev"].notna().any() else np.full(n, np.nan)
-    c, s = _cusum(ze, K, H, -1, reset)
+    c, s = _cusum(ze, K, H * SCALE, -1, reset)
     res["cusum_eof"], res["cusum_eof_signal"] = c, s
     zg = blocks("pg_gate_seal_dev")
-    cu, su = _cusum(zg, K, H, 1, reset)
-    cl, sl = _cusum(zg, K, H, -1, reset)
+    cu, su = _cusum(zg, K, H * SCALE, 1, reset)
+    cl, sl = _cusum(zg, K, H * SCALE, -1, reset)
     res["cusum_gate_seal"] = np.maximum(cu, cl)
     res["cusum_gate_seal_signal"] = su | sl
     # pack-integral variance: rolling 200-shot sd against the baseline sd, log scale
@@ -92,10 +123,12 @@ def _job(g):
     b = np.nanmedian(v[100:BASE]) if np.isfinite(v[100:BASE]).any() else np.nan
     lr = np.log(v / b)
     lr[np.arange(n) % 50 != 49] = np.nan
-    cv, sv = _cusum(lr, 0.10, 1.2, 1, reset)
+    cv, sv = _cusum(lr, VAR_K, VAR_H * SCALE, 1, reset)
     res["cusum_pack_var"], res["cusum_pack_var_signal"] = cv, sv
-    res["drift_any_signal"] = (res["ewma_pack_signal"] | res["ewma_fill_signal"] | res["cusum_eof_signal"]
-                               | res["cusum_gate_seal_signal"] | res["cusum_pack_var_signal"])
+    for d in DETECTORS:
+        res[f"{d}_signal"], res[f"{d}_fire"] = _rearm(res[f"{d}_signal"].to_numpy(bool), reset, REARM)
+    res["drift_any_signal"] = np.logical_or.reduce([res[f"{d}_signal"] for d in DETECTORS])
+    res["drift_any_fire"] = np.logical_or.reduce([res[f"{d}_fire"] for d in DETECTORS])
     return res
 
 

@@ -177,7 +177,7 @@ def _templates_wide(tmpl, shots):
     return w
 
 
-def run(max_runs=None, run_stride=1):
+def run(max_runs=None, run_stride=1, only_runs=None):
     t0 = time.time()
     for d in (RAW_DIR, REFERENCE_DIR, SAMPLES_DIR):
         if d.exists():
@@ -186,7 +186,7 @@ def run(max_runs=None, run_stride=1):
 
     print("Cell build (IM-11, IM-12): curves, summaries, machine data, state")
     sink = ParquetSink()
-    cell = build_cell(sink, max_runs=max_runs, run_stride=run_stride)
+    cell = build_cell(sink, max_runs=max_runs, run_stride=run_stride, only_runs=only_runs)
     sink.close()
     for kind, name in [("summary", "cavity_shot_summary"), ("machine", "machine_shot_data"), ("curves", "cavity_curves")]:
         print(f"  [{SYSTEM[name]:>11}]  {name:<24} {sink.total[kind]:>10,} rows (Parquet)")
@@ -210,13 +210,13 @@ def run(max_runs=None, run_stride=1):
     _save(plant.presses(), "presses")
     _save(parts, "part_attributes")
     _save(sheets, "process_sheets")
-    sd = lab["sort_dispositions"].merge(cell["shots"][["shot_id", "true_job_id", "press_id", "mold_id"]], on="shot_id")
     sort_scrap = []
+    sd = lab["sort_dispositions"]
     for r in sd[sd["pieces_confirmed_defective"] > 0].itertuples():
-        for code in str(r.defect_codes).split(";"):
-            sort_scrap.append(dict(job_id=r.true_job_id, press_id=r.press_id, mold_id=r.mold_id, defect_code=code,
-                                   qty=r.pieces_confirmed_defective / len(str(r.defect_codes).split(";")),
-                                   date=r.reviewed_ts.date()))
+        for item in str(r.defect_codes).split(";"):
+            code, qty = item.split(":")
+            sort_scrap.append(dict(job_id=r.job_id, press_id=r.press_id, mold_id=r.mold_id, defect_code=code,
+                                   qty=int(qty), date=pd.Timestamp(r.reviewed_ts).date()))
     job_mold = runs.set_index("job_id")["mold_id"]
     tl = lab["scrap_tallies"]
     cell_scrap = pd.concat([pd.DataFrame(sort_scrap),
@@ -276,5 +276,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=None, help="limit the cell build to the first N runs")
     ap.add_argument("--stride", type=int, default=1, help="take every Nth run (tuning passes)")
+    ap.add_argument("--only", default=None, help="comma-separated run numbers to build (tuning passes)")
     a = ap.parse_args()
-    run(a.runs, a.stride)
+    run(a.runs, a.stride, [int(x) for x in a.only.split(",")] if a.only else None)

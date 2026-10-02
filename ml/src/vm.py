@@ -29,7 +29,7 @@ def prepare(df):
     df["cell"] = df["mold_id"] + " / " + df["press_id"]
     df["y_weight"] = df["part_weight_g"] / df["nominal_weight_g"] - 1
     df["y_dimension"] = (df["critical_dimension_mm"] - df["nominal_dimension_mm"]) / df["dimension_tolerance_mm"]
-    df["cell_code"] = df["cell"].astype("category").cat.codes
+    df["cell_code"] = df["cell"].astype("category").cat.codes.astype("int64")   # int8 codes would overflow the cavity key
     df["cavity_key"] = (df["cell_code"] * 32 + df["cavity_id"]).astype(int)
     return df
 

@@ -161,7 +161,7 @@ def curve_params(m, sens_pos, st):
     st holds per-shot arrays; returns dict of per-shot arrays."""
     lv, leak, vent = st["lv"], st["leak"], st["vent"]
     eof = sens_pos == "end_of_fill"
-    t_tr = m["fill_s"] * np.exp(-st["dlog_vel"]) * (1 + st["sw_delay"])
+    t_tr = m["fill_s"] * np.exp(-st["dlog_vel"]) * (1 + st["sw_delay"]) * (1 + 2.0 * st.get("ring_fail", 0.0))
     a = 0.28 * (m["flow_ratio"] if eof else 1.0)
     t_arr = t_tr * np.clip(a * np.exp(0.12 * lv + 1.5 * leak), 0.05, 0.92)
     fill_level = st["fill_level"]
@@ -250,7 +250,7 @@ def ar1(rng, n, rho, sd):
 # Build
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
+def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1, only_runs=None):
     """sink(kind, df, mold_id, ts) receives the large per-shot tables in parts, written as
     Parquet by the caller: 'curves', 'summary', 'machine' and 'state'."""
     rng = np.random.default_rng(RANDOM_SEED + rng_seed_offset)
@@ -295,6 +295,8 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
     g10_by_run = {e["run"]: e for e in g10}
     if run_stride > 1:
         runs = runs[::run_stride]
+    if only_runs is not None:
+        runs = runs[runs["run_no"].isin(only_runs)] if hasattr(runs, "columns") else [x for x in runs if x["run_no"] in only_runs]
     if max_runs:
         runs = runs[:max_runs]
 
@@ -591,14 +593,18 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
             g10_kind = e["kind"]
             ramp = np.clip((idx - s0) / max(1, s1 - s0), 0, 1) * g10_mask
             if g10_kind == "ring_failing":
-                g10_leak = 0.06 * ramp + rng.exponential(0.02, n) * g10_mask
+                # leakage builds slowly: fill time lengthens, cushion varies, pack integral eases down; each value stays
+                # inside its band at first and crosses as the ring wears through
+                g10_leak = 0.11 * ramp ** 1.5
             elif g10_kind == "heater_zone":
-                g10_fill = 0.10 * ramp
+                # one barrel zone falls away from setpoint and the melt stiffens; the fill integral drifts up with it
+                g10_fill = 0.24 * ramp
             elif g10_kind == "nozzle_drool":
                 drool = g10_mask * rng.uniform(0.2, 1.0, n)
             else:
                 g10_fill = -0.08 * g10_mask
         leak_eff = leak + g10_leak
+        cool_dev = (-float(rng.uniform(0.3, 1.0)) if rng.random() < 0.4 else 0.0) + ar1(rng, n, 0.9, 0.05)   # seconds
 
         # ── Effective state ──
         base_noise_fill = ar1(rng, n, float(rng.uniform(*C["ar_integrals"])), C["noise_integral_frac"])
@@ -606,9 +612,9 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
         base_noise_pack = ar1(rng, n, float(rng.uniform(*C["ar_integrals"])), 1.0) * pack_sd
         lv = lv_g1 + lv_g5 + lv_g8 + g10_fill + 0.3 * g3 + np.log1p(regrind / 100 * -0.15) + base_noise_fill * 0.5
         st = dict(
-            lv=lv, leak=leak_eff, vent=vent, dlog_vel=dlog_vel, sw_delay=sw_delay,
+            lv=lv, leak=leak_eff, ring_fail=g10_leak, vent=vent, dlog_vel=dlog_vel, sw_delay=sw_delay,
             fill_level=0.7 * g3 + base_noise_fill + g9_step * 0.5,
-            pack_level=hold + g3 - 0.25 * (lv - base_noise_fill * 0.5) - 0.03 * tipw + base_noise_pack + g9_step,
+            pack_level=hold + g3 - 0.25 * (lv - base_noise_fill * 0.5) - 0.03 * tipw + base_noise_pack + g9_step - 0.6 * g10_leak,
             gs_level=0.4 * hold + 0.4 * g3 + ar1(rng, n, float(rng.uniform(*C["ar_timings"])), C["noise_timing_frac"]),
             dT=dT, dT_ab=dT_ab,
         )
@@ -778,7 +784,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
         ppar, pres = pg[2], pg[3]
         mach = pd.DataFrame(dict(
             shot_id=shot_ids, press_id=press, job_id=job, shot_ts=ts,
-            cycle_time_s=np.round(cyc * (1 + rng.normal(0, 0.004, n)), 2),
+            cycle_time_s=np.round(cyc * (1 + rng.normal(0, 0.004, n)) + cool_dev, 2),
             fill_time_s=np.round(ppar["t_tr"] * (1 + rng.normal(0, 0.01, n)), 3),
             switchover_position_mm=np.round(12.0 * (1 - sw_delay) + rng.normal(0, 0.05, n), 2),
             switchover_pressure_bar=np.round(ppar["p_tr"] * 2.1 * (1 + rng.normal(0, 0.02, n)), 1),
@@ -791,7 +797,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
             screw_rpm=np.round(110 + rng.normal(0, 1.0, n), 1),
             barrel_zone_1_actual_c=np.round(250 + melt * 0.3 + rng.normal(0, 0.4, n), 1),
             barrel_zone_2_actual_c=np.round(265 + melt * 0.6 + rng.normal(0, 0.4, n), 1),
-            barrel_zone_3_actual_c=np.round(275 + melt + (-25 * (g10_fill > 0.02)) + rng.normal(0, 0.4, n), 1),
+            barrel_zone_3_actual_c=np.round(275 + melt + (-40 * g10_fill / 0.24 if g10_kind == "heater_zone" else 0) + rng.normal(0, 0.4, n), 1),
             barrel_zone_4_actual_c=np.round(280 + melt + rng.normal(0, 0.4, n), 1),
             nozzle_actual_c=np.round(282 + melt + rng.normal(0, 0.5, n), 1),
             mold_temp_a_c=np.round(80 + dT - dT_ab / 2 + rng.normal(0, 0.2, n), 1),
@@ -870,23 +876,30 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                               if m["weld_line"] else np.zeros(n))
             p["splay"] = 0.011 / (1 + np.exp(-(moist - 0.55) / 0.08)) if R["hygroscopic"] else np.zeros(n)
             p["burn"] = 0.009 / (1 + np.exp(-(vent - 0.020) / 0.003)) * np.exp(dlog_vel)
-            p["warp"] = 0.035 / (1 + np.exp(-(np.abs(dT_ab) - 3.2) / 0.6)) if m["housing"] else np.zeros(n)
+            # warp: uneven cooling (a temperature difference between the mold halves, a hot mold, a short cooling time)
+            # and residual stress from packing well off its level
+            warp_x = np.abs(dT_ab) + 0.15 * np.clip(dT, 0, None) + 0.4 * np.clip(-cool_dev, 0, None)
+            warp_th = 0.006 / (1 + np.exp(-(warp_x - 3.2) / 0.6)) if m["housing"] else np.zeros(n)
+            warp_pk = 0.10 / (1 + np.exp(-(np.abs(pd_) - 1.0) / 0.12)) if m["housing"] else np.zeros(n)
+            p["warp"] = warp_th + warp_pk
             p["black_specks"] = regrind / 100 * 0.004 + (lv > 0.12) * 0.002
             p["contamination"] = np.zeros(n)
             p["gate_vestige"] = 0.005 * tipw ** 2 if m_id in ("M-2041", "M-2043") else np.zeros(n)
             p["other"] = np.zeros(n)
             p["dimensional"] = np.zeros(n)
             if g10_kind == "nozzle_drool":
-                p["other"] = p["other"] + 0.08 * g10_mask
+                p["other"] = p["other"] + 0.20 * g10_mask
             if g10_kind == "wrong_material":
-                p["other"] = p["other"] + 0.15 * g10_mask
+                p["other"] = p["other"] + 0.30 * g10_mask
 
             # continuous quality: weight and critical dimension
             # weight: nominal x (1 + a x pack integral deviation from template + b x fill deviation)
             wt_true = (m["weight_g"] * (1 + 0.12 * pd_ * band_pack + 0.03 * fd * C["alarm_band"]["fill_integral"] + density_dev)
                        + m["weight_g"] * cavity_offsets[m_id]["weight"][c - 1] + qrng.normal(0, m["weight_g"] * 0.0014, n))
-            # critical dimension: shrinkage falls with pack integral and a later gate seal, rises with mold temperature
-            dim_true = (dim_nom + tol * (0.37 * pd_ + 0.17 * gs_d - 0.035 * dT)
+            # critical dimension: shrinkage falls with pack integral and a later gate seal, and rises with mold temperature
+            # (both halves), melt temperature and a shorter cooling time; the thermal terms move the part without moving
+            # the cavity pressure values the template bands watch
+            dim_true = (dim_nom + tol * (0.37 * pd_ + 0.17 * gs_d - 0.085 * dT - 0.03 * np.abs(dT_ab) - 0.012 * melt + 0.12 * cool_dev)
                         + tol * cavity_offsets[m_id]["dim"][c - 1] + qrng.normal(0, tol * 0.062, n))
             dim_bad = np.abs(dim_true - dim_nom) > tol
 
@@ -915,7 +928,8 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                     elif code == "dimensional":
                         sgn = np.sign(dim_true[i] - dim_nom)
                         w = {kk: max(0.0, sgn * 0.37 * v[i]) for kk, v in contrib_pack.items()}
-                        w["G6"] = max(0.0, -sgn * 0.035 * dT[i])
+                        w["G6"] = max(0.0, -sgn * (0.085 * dT[i] + 0.03 * abs(dT_ab[i]))) + max(0.0, sgn * 0.12 * cool_dev[i])
+                        w["G8"] = w.get("G8", 0.0) + max(0.0, -sgn * 0.012 * melt[i])
                     elif code == "weld_line":
                         w = {kk: max(0.0, -v[i]) for kk, v in contrib_eof.items()}
                         w["G8"] = w.get("G8", 0) + max(0.0, -melt[i] / 20)
@@ -924,7 +938,11 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                     elif code == "burn":
                         w = {"G2": 1.0}
                     elif code == "warp":
-                        w = {"G6": 1.0}
+                        w = {"G6": float(warp_th[i])}
+                        sp = np.sign(pd_[i])
+                        tp = sum(max(0.0, sp * v[i]) for v in contrib_pack.values()) or 1.0
+                        for kk, v in contrib_pack.items():
+                            w[kk] = w.get(kk, 0.0) + float(warp_pk[i]) * max(0.0, sp * v[i]) / tp
                     elif code == "gate_vestige":
                         w = {"G7": 1.0}
                     elif code == "other" and g10_mask[i]:

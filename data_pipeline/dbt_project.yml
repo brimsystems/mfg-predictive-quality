@@ -16,6 +16,8 @@ vars:
   snapshot_date: "2026-04-30"
   maturity_days: 21
   spc_baseline_shots: 500
+  rule1_limit: 4.05               # deployed rule limits on the AR(1) residual charts, in sigma (textbook 3 and 2)
+  rule2_limit: 2.70
 
 models:
   molding_quality:

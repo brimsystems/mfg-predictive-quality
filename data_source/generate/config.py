@@ -158,7 +158,7 @@ CELL = dict(
 # of the alarm band) and state; base is the no-signal residual rate (G0).
 DEFECTS = dict(
     base_rate={"short_shot": 0.00006, "flash": 0.0002, "sink": 0.0003, "void": 0.0001, "splay": 0.0002,
-               "burn": 0.00005, "weld_line": 0.0002, "warp": 0.0003, "dimensional": 0.0,
+               "burn": 0.00005, "weld_line": 0.0002, "warp": 0.00015, "dimensional": 0.0,
                "black_specks": 0.0009, "contamination": 0.0008, "gate_vestige": 0.0003, "other": 0.0008},
 )
 

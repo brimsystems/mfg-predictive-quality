@@ -1,108 +1,123 @@
 mold_id,event_ts,event_type,shots_at_event,technician_id,notes
 M-2301,2025-01-09 06:07:13.799812726,PM,279900.0,TC-06,Preventive maintenance before run
-M-2043,2025-01-30 17:47:40.725069792,vent_cleaning,485939.0,TC-06,Vents cleaned at the scheduled shot count
-M-2041,2025-02-03 02:00:00.000000000,PM,538355.0,TC-06,Preventive maintenance before run
-M-2041,2025-02-03 04:00:00.000000000,vent_cleaning,538355.0,TC-03,Vents cleaned at the scheduled shot count
-M-2119,2025-02-06 11:14:57.626543699,PM,562729.0,TC-06,Preventive maintenance before run
-M-2119,2025-02-10 02:00:00.000000000,PM,570810.0,TC-04,Preventive maintenance before run
-M-2119,2025-02-10 04:00:00.000000000,vent_cleaning,570810.0,TC-06,Vents cleaned at the scheduled shot count
-M-2260,2025-02-17 02:00:00.000000000,PM,745421.0,TC-02,Preventive maintenance before run
-M-2041,2025-02-25 03:16:52.843325952,PM,548977.0,TC-06,Preventive maintenance before run
-M-2041,2025-03-03 02:00:00.000000000,PM,574687.0,TC-02,Preventive maintenance before run
-M-2041,2025-03-03 04:00:00.000000000,vent_cleaning,574687.0,TC-01,Vents cleaned at the scheduled shot count
-M-2118,2025-03-07 08:34:07.565372782,vent_cleaning,774805.0,TC-02,Vents cleaned at the scheduled shot count
-M-2260,2025-03-10 04:00:00.000000000,vent_cleaning,765028.0,TC-01,Vents cleaned at the scheduled shot count
-M-2118,2025-03-17 07:58:21.657257123,PM,786534.0,TC-05,Preventive maintenance before run
-M-2118,2025-03-17 21:38:20.554501000,cavity_block,787369.0,TC-04,"Cavity 2 blocked, damaged core pin"
-M-2118,2025-03-22 00:56:05.344109000,cavity_unblock,794785.0,TC-01,Cavity 2 repaired and unblocked
+M-2260,2025-01-10 03:15:31.982085372,PM,715838.0,TC-04,Preventive maintenance before run
+M-2041,2025-01-13 22:24:17.270242272,PM,528490.0,TC-03,Preventive maintenance before run
+M-2301,2025-01-16 09:16:21.579313003,PM,283026.0,TC-06,Preventive maintenance before run
+M-2043,2025-01-20 02:00:00.000000000,PM,473031.0,TC-05,Preventive maintenance before run
+M-2043,2025-01-22 04:34:25.198273000,cavity_block,478531.0,TC-04,"Cavity 5 blocked, damaged core pin"
+M-2260,2025-01-23 10:10:32.922372329,PM,728509.0,TC-04,Preventive maintenance before run
+M-2119,2025-01-24 21:01:53.296162808,PM,557620.0,TC-03,Preventive maintenance before run
+M-2043,2025-01-25 01:03:29.893695000,cavity_unblock,485939.0,TC-01,Cavity 5 repaired and unblocked
+M-2043,2025-01-30 17:47:40.725069792,vent_cleaning,485939.0,TC-04,Vents cleaned at the scheduled shot count
+M-2041,2025-02-03 02:00:00.000000000,PM,538355.0,TC-03,Preventive maintenance before run
+M-2119,2025-02-10 02:00:00.000000000,PM,570810.0,TC-06,Preventive maintenance before run
+M-2119,2025-02-10 04:00:00.000000000,vent_cleaning,570810.0,TC-01,Vents cleaned at the scheduled shot count
+M-2260,2025-02-17 02:00:00.000000000,PM,745421.0,TC-03,Preventive maintenance before run
+M-2260,2025-02-17 04:00:00.000000000,vent_cleaning,745421.0,TC-02,Vents cleaned at the scheduled shot count
+M-2041,2025-02-25 05:16:52.843325952,vent_cleaning,548977.0,TC-02,Vents cleaned at the scheduled shot count
+M-2041,2025-02-26 20:04:25.586235658,PM,557629.0,TC-06,Preventive maintenance before run
+M-2041,2025-03-03 02:00:00.000000000,PM,574687.0,TC-01,Preventive maintenance before run
+M-2041,2025-03-03 04:00:00.000000000,vent_cleaning,574687.0,TC-05,Vents cleaned at the scheduled shot count
+M-2041,2025-03-05 18:17:58.205028000,cavity_block,572211.0,TC-06,"Cavity 6 blocked, damaged core pin"
+M-2041,2025-03-06 19:21:10.437469000,cavity_unblock,574687.0,TC-01,Cavity 6 repaired and unblocked
+M-2118,2025-03-07 08:34:07.565372782,vent_cleaning,774805.0,TC-03,Vents cleaned at the scheduled shot count
 M-2041,2025-03-24 02:00:00.000000000,PM,581707.0,TC-05,Preventive maintenance before run
-M-2301,2025-04-07 04:00:00.000000000,vent_cleaning,285916.0,TC-01,Vents cleaned at the scheduled shot count
-M-2301,2025-04-09 19:58:47.605340628,PM,289904.0,TC-01,Preventive maintenance before run
+M-2043,2025-04-01 13:23:47.604292000,cavity_block,506178.0,TC-04,"Cavity 6 blocked, damaged core pin"
+M-2260,2025-04-03 23:21:44.192186679,PM,788868.0,TC-01,Preventive maintenance before run
+M-2260,2025-04-04 01:21:44.192186679,vent_cleaning,788868.0,TC-02,Vents cleaned at the scheduled shot count
+M-2043,2025-04-04 08:05:36.168590000,cavity_unblock,513000.0,TC-01,Cavity 6 repaired and unblocked
+M-2301,2025-04-07 04:00:00.000000000,vent_cleaning,285916.0,TC-02,Vents cleaned at the scheduled shot count
 M-2119,2025-04-14 02:00:00.000000000,PM,585697.0,TC-03,Preventive maintenance before run
-M-2119,2025-04-14 04:00:00.000000000,vent_cleaning,585697.0,TC-01,Vents cleaned at the scheduled shot count
+M-2119,2025-04-14 04:00:00.000000000,vent_cleaning,585697.0,TC-02,Vents cleaned at the scheduled shot count
 M-2118,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
 M-2119,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
 M-2260,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
 M-2301,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2043,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
 M-2041,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2119,2025-04-21 04:00:00.000000000,vent_cleaning,603733.0,TC-03,Vents cleaned at the scheduled shot count
-M-2118,2025-04-28 04:00:00.000000000,vent_cleaning,794785.0,TC-01,Vents cleaned at the scheduled shot count
-M-2260,2025-04-30 05:59:25.408747000,cavity_block,805692.0,TC-05,"Cavity 15 blocked, damaged core pin"
-M-2260,2025-05-02 12:20:37.487399000,cavity_unblock,814756.0,TC-01,Cavity 15 repaired and unblocked
+M-2043,2025-04-14 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2119,2025-04-21 04:00:00.000000000,vent_cleaning,603733.0,TC-02,Vents cleaned at the scheduled shot count
+M-2118,2025-04-28 02:00:00.000000000,PM,794785.0,TC-05,Preventive maintenance before run
+M-2118,2025-04-28 04:00:00.000000000,vent_cleaning,794785.0,TC-06,Vents cleaned at the scheduled shot count
 M-2301,2025-05-05 04:00:00.000000000,vent_cleaning,295679.0,TC-02,Vents cleaned at the scheduled shot count
-M-2043,2025-05-05 09:15:53.995733447,vent_cleaning,513000.0,TC-05,Vents cleaned at the scheduled shot count
-M-2260,2025-05-16 08:08:48.582360234,vent_cleaning,814756.0,TC-04,Vents cleaned at the scheduled shot count
-M-2260,2025-05-20 15:35:28.222544000,cavity_block,823809.0,TC-04,"Cavity 12 blocked, damaged core pin"
-M-2260,2025-05-22 10:18:03.564444000,cavity_unblock,830122.0,TC-01,Cavity 12 repaired and unblocked
-M-2118,2025-05-26 02:00:00.000000000,PM,809938.0,TC-03,Preventive maintenance before run
-M-2118,2025-05-26 04:00:00.000000000,vent_cleaning,809938.0,TC-06,Vents cleaned at the scheduled shot count
-M-2119,2025-06-02 04:00:00.000000000,vent_cleaning,623499.0,TC-01,Vents cleaned at the scheduled shot count
-M-2041,2025-06-06 13:53:30.206832778,vent_cleaning,605862.0,TC-01,Vents cleaned at the scheduled shot count
-M-2043,2025-06-20 05:49:55.027468960,vent_cleaning,537854.0,TC-06,Vents cleaned at the scheduled shot count
-M-2041,2025-06-30 05:22:10.151093083,vent_cleaning,640104.0,TC-04,Vents cleaned at the scheduled shot count
-M-2043,2025-07-07 04:00:00.000000000,vent_cleaning,567050.0,TC-02,Vents cleaned at the scheduled shot count
-M-2043,2025-07-09 15:25:06.055338000,cavity_block,573933.0,TC-04,"Cavity 8 blocked, damaged core pin"
-M-2301,2025-07-11 00:17:56.955652408,vent_cleaning,307734.0,TC-06,Vents cleaned at the scheduled shot count
-M-2043,2025-07-14 18:23:23.821506000,cavity_unblock,582204.0,TC-01,Cavity 8 repaired and unblocked
+M-2043,2025-05-05 09:15:53.995733447,vent_cleaning,513000.0,TC-04,Vents cleaned at the scheduled shot count
+M-2118,2025-05-26 04:00:00.000000000,vent_cleaning,809938.0,TC-04,Vents cleaned at the scheduled shot count
+M-2119,2025-06-02 04:00:00.000000000,vent_cleaning,623499.0,TC-06,Vents cleaned at the scheduled shot count
+M-2041,2025-06-06 13:53:30.206832778,vent_cleaning,605862.0,TC-04,Vents cleaned at the scheduled shot count
+M-2041,2025-06-09 02:00:00.000000000,PM,617689.0,TC-02,Preventive maintenance before run
+M-2041,2025-06-12 14:34:00.172401000,cavity_block,627940.0,TC-04,"Cavity 4 blocked, damaged core pin"
+M-2041,2025-06-13 06:10:46.090125000,cavity_unblock,629229.0,TC-01,Cavity 4 repaired and unblocked
+M-2260,2025-06-13 12:24:21.328555861,vent_cleaning,830122.0,TC-05,Vents cleaned at the scheduled shot count
+M-2043,2025-06-20 03:49:55.027468960,PM,537854.0,TC-05,Preventive maintenance before run
+M-2043,2025-06-20 05:49:55.027468960,vent_cleaning,537854.0,TC-01,Vents cleaned at the scheduled shot count
+M-2041,2025-06-30 04:00:00.000000000,vent_cleaning,629229.0,TC-02,Vents cleaned at the scheduled shot count
+M-2043,2025-07-07 02:00:00.000000000,PM,567050.0,TC-03,Preventive maintenance before run
+M-2043,2025-07-07 04:00:00.000000000,vent_cleaning,567050.0,TC-03,Vents cleaned at the scheduled shot count
+M-2301,2025-07-10 22:17:56.955652408,PM,307734.0,TC-01,Preventive maintenance before run
+M-2301,2025-07-11 00:17:56.955652408,vent_cleaning,307734.0,TC-01,Vents cleaned at the scheduled shot count
 M-2043,2025-07-16 09:20:01.235066637,hot_runner_tip,582204.0,TC-01,Hot-runner tips replaced
-M-2041,2025-07-21 11:59:25.599914624,PM,676442.0,TC-01,Preventive maintenance before run
-M-2041,2025-07-21 13:59:25.599914624,vent_cleaning,676442.0,TC-03,Vents cleaned at the scheduled shot count
+M-2041,2025-07-18 03:27:51.705515987,vent_cleaning,657730.0,TC-06,Vents cleaned at the scheduled shot count
+M-2041,2025-07-22 07:36:12.588351000,cavity_block,678700.0,TC-05,"Cavity 7 blocked, damaged core pin"
+M-2041,2025-07-24 12:06:36.742333000,cavity_unblock,684740.0,TC-01,Cavity 7 repaired and unblocked
 M-2043,2025-07-24 20:24:53.395791467,PM,589191.0,TC-05,Preventive maintenance before run
-M-2043,2025-07-28 04:00:00.000000000,vent_cleaning,606203.0,TC-01,Vents cleaned at the scheduled shot count
-M-2041,2025-08-14 06:17:05.992577303,PM,696990.0,TC-03,Preventive maintenance before run
-M-2041,2025-08-14 08:17:05.992577303,vent_cleaning,696990.0,TC-02,Vents cleaned at the scheduled shot count
-M-2118,2025-08-22 18:13:38.398363728,PM,827755.0,TC-05,Preventive maintenance before run
-M-2118,2025-08-22 20:13:38.398363728,vent_cleaning,827755.0,TC-04,Vents cleaned at the scheduled shot count
-M-2260,2025-08-29 06:54:54.436736302,vent_cleaning,853370.0,TC-06,Vents cleaned at the scheduled shot count
-M-2119,2025-09-11 21:40:28.654644715,vent_cleaning,641893.0,TC-04,Vents cleaned at the scheduled shot count
-M-2118,2025-09-17 07:07:18.587697876,PM,837777.0,TC-05,Preventive maintenance before run
-M-2043,2025-09-25 09:58:21.090146514,vent_cleaning,639067.0,TC-06,Vents cleaned at the scheduled shot count
-M-2260,2025-10-06 02:00:00.000000000,PM,884850.0,TC-04,Preventive maintenance before run
-M-2301,2025-10-06 04:00:00.000000000,vent_cleaning,318679.0,TC-03,Vents cleaned at the scheduled shot count
-M-2260,2025-10-09 13:49:23.296913136,PM,909472.0,TC-02,Preventive maintenance before run
-M-2260,2025-10-09 15:49:23.296913136,vent_cleaning,909472.0,TC-06,Vents cleaned at the scheduled shot count
-M-2260,2025-10-30 19:14:09.282501073,PM,940596.0,TC-01,Preventive maintenance before run
-M-2119,2025-10-31 00:30:20.164203929,vent_cleaning,659521.0,TC-04,Vents cleaned at the scheduled shot count
-M-2041,2025-11-10 04:00:00.000000000,vent_cleaning,728709.0,TC-06,Vents cleaned at the scheduled shot count
-M-2260,2025-11-17 20:42:07.602127090,vent_cleaning,958296.0,TC-06,Vents cleaned at the scheduled shot count
+M-2043,2025-07-28 04:00:00.000000000,vent_cleaning,606203.0,TC-05,Vents cleaned at the scheduled shot count
+M-2041,2025-08-13 19:09:30.151677832,PM,684740.0,TC-01,Preventive maintenance before run
+M-2041,2025-08-13 21:09:30.151677832,vent_cleaning,684740.0,TC-06,Vents cleaned at the scheduled shot count
+M-2118,2025-08-22 20:13:38.398363728,vent_cleaning,827755.0,TC-02,Vents cleaned at the scheduled shot count
+M-2041,2025-09-04 05:11:47.879781000,cavity_block,704730.0,TC-06,"Cavity 2 blocked, damaged core pin"
+M-2041,2025-09-08 22:27:15.757836000,cavity_unblock,712204.0,TC-01,Cavity 2 repaired and unblocked
+M-2119,2025-09-11 05:33:37.249721954,PM,635213.0,TC-02,Preventive maintenance before run
+M-2119,2025-09-11 19:40:28.654644715,PM,641893.0,TC-06,Preventive maintenance before run
+M-2119,2025-09-11 21:40:28.654644715,vent_cleaning,641893.0,TC-03,Vents cleaned at the scheduled shot count
+M-2118,2025-09-22 13:22:22.617091000,cavity_block,844041.0,TC-04,"Cavity 2 blocked, damaged core pin"
+M-2118,2025-09-24 22:43:23.892567000,cavity_unblock,848185.0,TC-01,Cavity 2 repaired and unblocked
+M-2043,2025-09-25 09:58:21.090146514,vent_cleaning,639067.0,TC-01,Vents cleaned at the scheduled shot count
+M-2260,2025-10-06 04:00:00.000000000,vent_cleaning,884850.0,TC-03,Vents cleaned at the scheduled shot count
+M-2301,2025-10-06 04:00:00.000000000,vent_cleaning,318679.0,TC-06,Vents cleaned at the scheduled shot count
+M-2260,2025-10-20 04:00:00.000000000,vent_cleaning,929470.0,TC-01,Vents cleaned at the scheduled shot count
+M-2119,2025-10-31 00:30:20.164203929,vent_cleaning,659521.0,TC-01,Vents cleaned at the scheduled shot count
+M-2041,2025-11-07 22:46:05.665276745,PM,712204.0,TC-01,Preventive maintenance before run
+M-2041,2025-11-08 00:46:05.665276745,vent_cleaning,712204.0,TC-03,Vents cleaned at the scheduled shot count
+M-2041,2025-11-12 19:58:25.155340000,cavity_block,736490.0,TC-04,"Cavity 4 blocked, damaged core pin"
+M-2041,2025-11-13 12:04:02.824468000,cavity_unblock,737863.0,TC-01,Cavity 4 repaired and unblocked
+M-2119,2025-11-24 02:00:00.000000000,PM,666387.0,TC-04,Preventive maintenance before run
 M-2043,2025-11-24 02:00:00.000000000,PM,661834.0,TC-05,Preventive maintenance before run
-M-2043,2025-11-24 04:00:00.000000000,vent_cleaning,661834.0,TC-03,Vents cleaned at the scheduled shot count
-M-2301,2025-11-28 19:05:58.650985374,vent_cleaning,333377.0,TC-02,Vents cleaned at the scheduled shot count
-M-2118,2025-12-08 04:00:00.000000000,vent_cleaning,848185.0,TC-04,Vents cleaned at the scheduled shot count
-M-2119,2025-12-19 13:22:40.012305226,vent_cleaning,679639.0,TC-03,Vents cleaned at the scheduled shot count
-M-2301,2025-12-22 02:00:00.000000000,PM,343853.0,TC-01,Preventive maintenance before run
-M-2301,2025-12-22 04:00:00.000000000,vent_cleaning,343853.0,TC-06,Vents cleaned at the scheduled shot count
-M-2119,2025-12-25 13:05:40.673009000,cavity_block,686550.0,TC-05,"Cavity 2 blocked, damaged core pin"
-M-2119,2025-12-30 02:41:12.351854000,cavity_unblock,691091.0,TC-01,Cavity 2 repaired and unblocked
-M-2260,2025-12-30 07:17:18.888953253,PM,1009087.0,TC-04,Preventive maintenance before run
+M-2043,2025-11-24 04:00:00.000000000,vent_cleaning,661834.0,TC-04,Vents cleaned at the scheduled shot count
+M-2301,2025-11-28 17:05:58.650985374,PM,333377.0,TC-06,Preventive maintenance before run
+M-2301,2025-11-28 19:05:58.650985374,vent_cleaning,333377.0,TC-04,Vents cleaned at the scheduled shot count
+M-2119,2025-12-01 02:00:00.000000000,PM,672831.0,TC-06,Preventive maintenance before run
+M-2260,2025-12-08 02:00:00.000000000,PM,974804.0,TC-05,Preventive maintenance before run
+M-2260,2025-12-08 04:00:00.000000000,vent_cleaning,974804.0,TC-01,Vents cleaned at the scheduled shot count
+M-2118,2025-12-08 04:00:00.000000000,vent_cleaning,848185.0,TC-06,Vents cleaned at the scheduled shot count
+M-2260,2025-12-15 10:29:10.538188461,PM,990205.0,TC-03,Preventive maintenance before run
+M-2119,2025-12-19 11:22:40.012305226,PM,679639.0,TC-06,Preventive maintenance before run
+M-2119,2025-12-19 13:22:40.012305226,vent_cleaning,679639.0,TC-04,Vents cleaned at the scheduled shot count
+M-2301,2025-12-22 04:00:00.000000000,vent_cleaning,343853.0,TC-03,Vents cleaned at the scheduled shot count
+M-2119,2025-12-26 06:49:13.677970000,cavity_block,688072.0,TC-02,"Cavity 3 blocked, damaged core pin"
+M-2041,2025-12-29 04:00:00.000000000,vent_cleaning,737863.0,TC-06,Vents cleaned at the scheduled shot count
+M-2119,2025-12-30 05:13:08.973126000,cavity_unblock,691091.0,TC-01,Cavity 3 repaired and unblocked
 M-2260,2025-12-30 09:17:18.888953253,vent_cleaning,1009087.0,TC-02,Vents cleaned at the scheduled shot count
-M-2301,2026-01-05 02:00:00.000000000,PM,349066.0,TC-05,Preventive maintenance before run
-M-2119,2026-01-12 02:00:00.000000000,PM,691091.0,TC-04,Preventive maintenance before run
+M-2301,2026-01-05 02:00:00.000000000,PM,349066.0,TC-01,Preventive maintenance before run
+M-2119,2026-01-12 02:00:00.000000000,PM,691091.0,TC-03,Preventive maintenance before run
 M-2301,2026-01-19 08:47:42.829631215,PM,353361.0,TC-03,Preventive maintenance before run
-M-2301,2026-01-19 10:47:42.829631215,vent_cleaning,353361.0,TC-05,Vents cleaned at the scheduled shot count
+M-2301,2026-01-19 10:47:42.829631215,vent_cleaning,353361.0,TC-03,Vents cleaned at the scheduled shot count
 M-2118,2026-01-24 00:43:47.679582758,PM,856637.0,TC-01,Preventive maintenance before run
-M-2041,2026-01-26 04:00:00.000000000,vent_cleaning,757806.0,TC-02,Vents cleaned at the scheduled shot count
-M-2118,2026-01-27 14:47:27.800450000,cavity_block,859387.0,TC-06,"Cavity 2 blocked, damaged core pin"
-M-2301,2026-01-29 08:49:08.179248877,PM,358123.0,TC-04,Preventive maintenance before run
-M-2301,2026-02-02 04:00:00.000000000,vent_cleaning,365787.0,TC-06,Vents cleaned at the scheduled shot count
-M-2118,2026-02-02 14:22:27.831522000,cavity_unblock,866986.0,TC-01,Cavity 2 repaired and unblocked
-M-2118,2026-02-06 12:53:20.282617807,vent_cleaning,866986.0,TC-01,Vents cleaned at the scheduled shot count
-M-2041,2026-02-09 02:00:00.000000000,PM,765023.0,TC-04,Preventive maintenance before run
-M-2043,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2260,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2119,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2118,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2301,2026-01-29 08:49:08.179248877,PM,358123.0,TC-01,Preventive maintenance before run
+M-2301,2026-02-02 04:00:00.000000000,vent_cleaning,365787.0,TC-03,Vents cleaned at the scheduled shot count
+M-2118,2026-02-06 10:53:20.282617807,PM,866986.0,TC-03,Preventive maintenance before run
+M-2118,2026-02-06 12:53:20.282617807,vent_cleaning,866986.0,TC-04,Vents cleaned at the scheduled shot count
+M-2041,2026-02-09 04:00:00.000000000,vent_cleaning,765023.0,TC-06,Vents cleaned at the scheduled shot count
 M-2041,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2043,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2118,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2119,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
+M-2260,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
 M-2301,2026-02-09 07:00:00.000000000,sensor_recalibration,,TC-01,Cavity pressure sensors recalibrated
-M-2119,2026-02-16 04:00:00.000000000,vent_cleaning,700427.0,TC-06,Vents cleaned at the scheduled shot count
-M-2043,2026-02-23 04:00:00.000000000,vent_cleaning,686298.0,TC-01,Vents cleaned at the scheduled shot count
-M-2043,2026-02-24 11:28:45.353066000,cavity_block,689424.0,TC-04,"Cavity 7 blocked, damaged core pin"
-M-2043,2026-02-28 10:33:20.047104000,cavity_unblock,699944.0,TC-01,Cavity 7 repaired and unblocked
-M-2041,2026-03-02 02:00:00.000000000,PM,777779.0,TC-04,Preventive maintenance before run
-M-2301,2026-03-02 02:00:00.000000000,PM,369888.0,TC-06,Preventive maintenance before run
+M-2119,2026-02-16 02:00:00.000000000,PM,700427.0,TC-04,Preventive maintenance before run
+M-2119,2026-02-16 04:00:00.000000000,vent_cleaning,700427.0,TC-01,Vents cleaned at the scheduled shot count
+M-2118,2026-02-23 02:00:00.000000000,PM,875091.0,TC-01,Preventive maintenance before run
+M-2043,2026-02-23 04:00:00.000000000,vent_cleaning,686298.0,TC-02,Vents cleaned at the scheduled shot count
 M-2041,2026-03-02 03:00:00.000000000,hot_runner_tip,777779.0,TC-01,Hot-runner tips replaced
-M-2041,2026-03-16 02:00:00.000000000,PM,803663.0,TC-05,Preventive maintenance before run
+M-2043,2026-03-10 22:30:14.754481567,PM,699944.0,TC-01,Preventive maintenance before run
 M-2041,2026-03-16 02:00:00.000000000,PM,785142.0,TC-05,Preventive maintenance before run
-M-2041,2026-03-16 04:00:00.000000000,vent_cleaning,785142.0,TC-02,Vents cleaned at the scheduled shot count
-M-2043,2026-03-20 21:22:37.069653337,PM,708740.0,TC-03,Preventive maintenance before run
+M-2041,2026-03-16 04:00:00.000000000,vent_cleaning,803663.0,TC-04,Vents cleaned at the scheduled shot count
+M-2043,2026-03-20 23:22:37.069653337,vent_cleaning,708740.0,TC-02,Vents cleaned at the scheduled shot count

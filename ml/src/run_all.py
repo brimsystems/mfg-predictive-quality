@@ -120,11 +120,9 @@ ANOMALY_PERSIST = (2, 10)                        # two flags in ten consecutive 
 
 
 def anomaly_alarms(te, flags):
-    f = te[["shot_id", "job_id", "shot_ts"]].merge(flags, on="shot_id", how="left").sort_values("shot_ts")
-    f["if_flag"] = f["if_flag"].fillna(False).astype(bool)
-    k, n = ANOMALY_PERSIST
-    f["alarm"] = f.groupby("job_id")["if_flag"].transform(lambda x: x.rolling(n, min_periods=1).sum() >= k)
-    return f[f["alarm"]]
+    """Shots in the anomaly model's alarm state (the stored flag is already the two-in-ten alarm state)."""
+    f = te[["shot_id", "job_id", "shot_ts"]].merge(flags, on="shot_id", how="left")
+    return f[f["if_flag"].fillna(False).astype(bool)]
 
 
 VM_FLAG = 0.8                                    # predicted dimension beyond 80% of tolerance: a layer alarm
@@ -138,17 +136,14 @@ def vm_shot_dimension(shots, model=None, meta=None):
 
 
 def window_signals(df, an, start, end, vm_dim):
-    from .features import connect
+    """Each layer's flagged shots, one definition used by both the shot-level table and the alarm budget:
+    template alarm on the shot; rule 1 or 2 on the shot (AR(1)-residual charts); a drift detector signaling on the
+    shot; the anomaly model's alarm state; the virtual metrology advisory (predicted dimension past 75% of tolerance)."""
     te = df[(df["shot_ts"] >= start) & (df["shot_ts"] < end) & df["after_approval"]].copy()
-    con = connect()
-    rules = con.execute(f"""select job_id, shot_id, shot_ts from spc_alarms where shot_ts >= '{start}' and shot_ts < '{end}'
-                            and rule in {RULES_DEPLOYED}""").df()
-    drift = con.execute(f"select job_id, shot_id, shot_ts from drift_signals where shot_ts >= '{start}' and shot_ts < '{end}'").df()
-    con.close()
     te["vm_dim"] = te["shot_id"].map(vm_dim)
     an_al = anomaly_alarms(te, an[["shot_id", "if_flag"]])
-    sig = {"template_sort": te[te["unit_alarm_state"] == "alarm"], "rules": rules, "drift": drift,
-           "virtual_metrology": te[te["vm_dim"] > VM_FLAG], "anomaly": an_al}
+    sig = {"template_sort": te[te["unit_alarm_state"] == "alarm"], "rules": te[te["spc_we1"] | te["spc_we2"]],
+           "drift": te[te["drift_any_signal"].astype(bool)], "virtual_metrology": te[te["vm_dim"] > VM_AUDIT], "anomaly": an_al}
     return te, sig
 
 
@@ -171,7 +166,7 @@ def layer_comparison(df, an, start=None, end=None, vm_dim=None):
     budget["added_layers"] = sum(budget[k] for k in ("rules", "drift", "virtual_metrology", "anomaly"))
     budget["technician_total"] = budget["added_layers"]
     budget["total_with_template"] = budget["added_layers"] + budget["template_sort"]
-    audit_trig = te[te["vm_dim"] > VM_AUDIT]
+    audit_trig = te[te["vm_dim"] > VM_AUDIT]                     # the virtual metrology layer is its advisory
     budget["vm_advisory_audits"] = layers.alarms_per_shift(layers.hours(audit_trig), n_hours)
     by_mold = d.groupby(["mold_id", "layer"])["qty"].sum().unstack(fill_value=0)
     by_mold = by_mold.div(by_mold.sum(axis=1), axis=0)
@@ -185,7 +180,7 @@ def layer_comparison(df, an, start=None, end=None, vm_dim=None):
     an_ids = set(sig["anomaly"]["shot_id"])
     flags = {"template_sort": lk["unit_alarm_state"] == "alarm", "rules": lk["spc_we1"] | lk["spc_we2"],
              "drift": lk["drift_any_signal"].astype(bool), "anomaly": lk["shot_id"].isin(an_ids),
-             "virtual_metrology": (lk["vm_dim"] > VM_FLAG) & (lk["defect_code"] == "dimensional")}
+             "virtual_metrology": (lk["vm_dim"] > VM_AUDIT) & (lk["defect_code"] == "dimensional")}
     shot_catch = {k: float((v * lk["qty"]).sum() / lk["qty"].sum()) for k, v in flags.items()}
     return dict(share=share.to_dict(), dimensional_share=dim_share.to_dict(), alarms_per_shift=budget,
                 by_mold=by_mold.round(4).to_dict(orient="index"), by_code=by_code.to_dict(orient="index"),

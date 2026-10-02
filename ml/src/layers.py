@@ -6,10 +6,9 @@ layer that alarmed first in time on the same job, within its look-back, is credi
 (ties go to the earlier layer in this list):
 
   1. template alarms and sort: the unit alarmed on the job in the hour or the two before
-  2. control-chart rules on every shot, at the deployed rule set (rules 1 and 2)
-  3. drift detection: a signal onset (EWMA, CUSUM, lot step) in the eight hours before,
-     since a drift signal stays open until its reset
-  4. virtual metrology: a predicted dimension beyond 80% of tolerance (dimensional codes only)
+  2. control-chart rules 1 and 2 on every shot (AR(1)-residual charts)
+  3. drift detection: a detector signaling (EWMA beyond its limit, a CUSUM crossing) in the eight hours before
+  4. virtual metrology: the advisory, a predicted dimension past 75% of tolerance (dimensional codes only)
   5. the anomaly model: two flags in ten consecutive shots
   6. none
 

@@ -79,7 +79,9 @@ def main():
     check("3", "shots sorted", len(sorted_ids) / len(prod), 0.005, 0.010)
     check("3", "defective pieces on sorted shots (sort removal)", rp["shot_id"].isin(sorted_ids).mean(), 0.30, 0.40)
     sd = pd.read_csv(RAW_DIR / "qms" / "sort_dispositions.csv")
-    check("3", "false rejects: sorted shots found good at review", float(np.mean(sd["pieces_confirmed_defective"] == 0)), 0.25, 0.40)
+    tray = sd[sd["review_mode"] == "indexed_tray"]
+    check("3", "false rejects: sorted shots found good at review (indexed-tray molds)", float(np.mean(tray["pieces_confirmed_defective"] == 0)), 0.25, 0.40)
+    check("3", "sorted pieces found good at review (all molds)", float(sd["pieces_good"].sum() / sd["pieces_reviewed"].sum()), None, None)
     conf = rp[rp["caught_by"].notna()]
     sh = conf["root_cause_code"].value_counts(normalize=True)
     for g, lo, hi in [("G1", .15, .22), ("G2", .10, .15), ("G3", .15, .20), ("G4", .08, .12), ("G8", .06, .10),
@@ -108,7 +110,7 @@ def main():
         b, *_ = np.linalg.lstsq(X, g["dim_true"], rcond=None)
         r2s.append(1 - np.var(g["dim_true"] - X @ b) / np.var(g["dim_true"]))
     check("3", "weight vs pack integral correlation (median mold x press)", np.median(cors), 0.75, 0.90)
-    check("3", "dimension R2 on pack integral and gate seal (median)", np.median(r2s), 0.65, 0.85)
+    check("3", "dimension R2 on pack integral and gate seal (median)", np.median(r2s), 0.35, 0.55)   # dimension also follows mold temperature, melt and cooling
 
     # G2: end-of-fill CUSUM signal against the burn rise, per cleaning interval
     eof = con.execute("""select s.shot_id, s.mold_id, s.shot_ts, avg(s.end_of_fill_pressure_bar) eof

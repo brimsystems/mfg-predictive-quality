@@ -32,7 +32,7 @@ CAVITY = ["pg_fill_dev", "pg_pack_dev", "pg_peak_dev", "pg_gate_seal_dev", "pg_p
 POST_GATE_ONLY = [c for c in CAVITY if not c.startswith("eof_")]
 MACHINE = ["cushion_window_pos", "hold_pressure_window_pos", "melt_temp_window_pos", "mold_temp_window_pos",
            "mold_temp_half_diff_c", "fill_time_rel", "recovery_time_rel", "peak_injection_pressure_rel",
-           "switchover_pressure_rel"]
+           "switchover_pressure_rel", "cycle_time_rel"]
 HISTORY = ["shots_since_approval", "shots_since_vent_cleaning", "shots_since_hot_runner_tip", "shots_since_pm",
            "days_since_ring_replace", "days_since_tcu_service", "cert_mfi_band_position", "cert_moisture_pct",
            "regrind_pct", "dryer_dew_point_c", "lot_residence_h", "hours_since_lot_change",

@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from ml.reports.style import ACCENT, AMBER, BRAND_BLUE, GREY, LIGHT_BLUE, RED, fig, img, pct, shell, table  # noqa: E402
 from ml.src.features import DATA_DIR, connect  # noqa: E402
+from analytics.reports import cell_additions  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "dashboard.html"
 
@@ -32,8 +33,9 @@ def main():
     alarms = con.execute("select job_id, mold_id, shot_ts, rule from spc_alarms").df()
     drift = con.execute("select job_id, mold_id, shot_ts, detector from drift_signals").df()
     sort_rev = con.execute("""
-        select s.mold_id, count(*) as sorted_shots, avg((r.pieces_confirmed_defective = 0)::int) as false_reject_share
-        from stg_qms__sort_dispositions r join fct_shot s using (shot_id) group by 1 order by 1""").df()
+        select r.mold_id, any_value(r.review_mode) as review_mode, sum(r.sorted_shots) as sorted_shots,
+               sum(r.pieces_good) / sum(r.pieces_reviewed) as false_reject_share
+        from stg_qms__sort_dispositions r group by 1 order by 1""").df()
     link = con.execute("""
         select source, sum(qty) as qty, sum(case when shot_id is not null then qty else 0 end) as linked
         from fct_confirmed_defects group by 1""").df()
@@ -116,7 +118,8 @@ The cell's shot-level view follows below.</p>
 added on every shot. Rules 4 and 5 of the audit chart are not deployed on every shot (see the ML overview for why).</p>
 {c4}
 <h3>Sort and false rejects by mold</h3>
-{table(sort_rev.rename(columns={"mold_id": "Mold", "sorted_shots": "Sorted shots", "false_reject_share": "Found good at review"}), {"Sorted shots": lambda v: f"{v:,.0f}", "Found good at review": pct})}
+{table(sort_rev.assign(review_mode=sort_rev["review_mode"].map({"indexed_tray": "per shot (indexed tray)", "per_shift": "per shift"})).rename(columns={"mold_id": "Mold", "review_mode": "Review", "sorted_shots": "Sorted shots", "false_reject_share": "Sorted pieces found good"}), {"Sorted shots": lambda v: f"{v:,.0f}", "Sorted pieces found good": pct})}
+{cell_additions.build()}
 <h3>Drift signals open</h3>
 {table(open_sig.reset_index().rename(columns={'index': 'Detector', 'detector': 'Detector'}))}
 <h3>Virtual metrology error against gauge (test period, pooled model)</h3>

@@ -326,14 +326,16 @@ def main():
 
     parts = R["parts"].set_index("mold_id")
     sort_m = RS.q("""
-        select s.mold_id, count(*) as sorted_shots, avg((r.pieces_confirmed_defective = 0)::int) as found_good,
+        select r.mold_id, any_value(r.review_mode) as review_mode, sum(r.sorted_shots) as sorted_shots,
+               sum(r.pieces_good) / sum(r.pieces_reviewed) as found_good, sum(r.pieces_reviewed) as sorted_pieces,
                sum(r.pieces_good) as good_pieces, sum(r.pieces_good * p.standard_cost) as good_cost
-        from stg_qms__sort_dispositions r join fct_shot s using (shot_id) join stg_erp__part_attributes p on p.mold_id = s.mold_id
+        from stg_qms__sort_dispositions r join stg_erp__part_attributes p on p.mold_id = r.mold_id
         group by 1 order by 1""")
     prod = RS.q("select mold_id, count(*) as shots from fct_shot where after_approval group by 1")
     sort_m = sort_m.merge(prod, on="mold_id")
     good_pieces, good_cost = int(sort_m["good_pieces"].sum()), float(sort_m["good_cost"].sum())
-    fr = R["sort"]["false_reject_share"]
+    fr = R["sort"]["pieces_found_good_share"]
+    fr_tray = R["sort"]["false_reject_share"]
     sorted_share = S["sorted_shots"] / S["prod_shots"]
     pts_rules = R["spc_points"]
     lead = RS.q(f"""
@@ -419,12 +421,14 @@ value to the alarm limit. A shot outside any alarm band is an <strong>alarm</str
 the good ones. Separately, quality pulls an <strong>hourly audit</strong> of 6 to 20 pieces, measures weight and the critical dimension, checks them
 visually, and plots the mean weight on <strong>audit control charts</strong> with the Western Electric rules 1, 2, 4 and 5.</p>
 {section("labels", "2.3", "How outcomes are known", sub=True)}
-<p>Four records say which pieces were defective. Sort dispositions (the reject-bin review) and audit measurements are tied to a specific shot: the
-robot records the cycle it sampled on {pct(R['audits']['linked'], 0)} of audit pieces. Packing tallies record defects by job, hour and code with no shot,
+<p>Four records say which pieces were defective. On the medical molds the reject-bin review is tied to its shot, through the indexed tray; on the
+other molds it covers a whole shift and carries the job, not the shot. Audit measurements are tied to their shot where the robot records the cycle it
+sampled, on {pct(R['audits']['linked'], 0)} of audit pieces. Packing tallies record defects by job, hour and code with no shot,
 and customer returns arrive weeks later. A job's quality is taken as final 21 days after its last shot. <strong>Linkage coverage</strong>, the share of
 confirmed defective pieces tied to a shot, is {pct(link)}.</p>
 <div class="box"><h4>How catch is measured</h4><ul>
-<li><strong>Shot-level catch:</strong> on defects linked to a shot, whether the layer alarmed on that shot.</li>
+<li><strong>Shot-level catch:</strong> on defects linked to a shot, whether the layer alarmed on that shot. Only the medical molds' reject-bin reviews and
+the robot-linked audits are tied to a shot, so shot-level figures mostly reflect the medical molds.</li>
 <li><strong>Job-hour coverage:</strong> on all confirmed defects (sort review, audits and packing tallies), whether the layer alarmed on that job in that
 hour or shortly before (two hours; eight for drift, whose signal stays open until its reset). Each defect is credited to the layer that alarmed first in time.</li>
 <li><strong>Points</strong> means percentage points of confirmed defects under job-hour coverage. <strong>Alarms per shift</strong> counts the job-hours
@@ -438,25 +442,29 @@ Test period: December 2025 to March 2026, after training through September and v
     st = sort_m.copy()
     st["Mold"] = st["mold_id"] + np.where(st["mold_id"].isin(MEDICAL), " (medical)", "")
     st["Shots sorted"] = (st["sorted_shots"] / st["shots"]).map(lambda v: pct(v, 2))
-    st["Found good at review"] = st["found_good"].map(lambda v: pct(v, 0))
+    st["Review"] = st["review_mode"].map({"indexed_tray": "per shot", "per_shift": "per shift"})
+    st["Sorted pieces found good"] = st["found_good"].map(lambda v: pct(v, 0))
     st["Good pieces sorted"] = st["good_pieces"].map(lambda v: f"{v:,.0f}")
     st["At standard cost"] = st["good_cost"].map(lambda v: f"${v:,.0f}")
-    st = st[["Mold", "Shots sorted", "Found good at review", "Good pieces sorted", "At standard cost"]]
+    st = st[["Mold", "Review", "Shots sorted", "Sorted pieces found good", "Good pieces sorted", "At standard cost"]]
     med = sort_m[sort_m["mold_id"].isin(MEDICAL)]
     oth = sort_m[~sort_m["mold_id"].isin(MEDICAL)]
-    med_fr = float((med["found_good"] * med["sorted_shots"]).sum() / med["sorted_shots"].sum())
-    oth_fr = float((oth["found_good"] * oth["sorted_shots"]).sum() / oth["sorted_shots"].sum())
+    med_fr = float(med["good_pieces"].sum() / med["sorted_pieces"].sum())
+    oth_fr = float(oth["good_pieces"].sum() / oth["sorted_pieces"].sum())
     hi = sort_m.sort_values("found_good").iloc[-1]
     s3 = f"""
 {section("existing", "Section 3", "What the Existing Process Control Caught")}
 <p><span class="tag spc">SPC</span> The template alarms and sort cover <strong>{pct(share.get('template_sort', 0))}</strong> of confirmed defects
 (job-hour coverage) at <strong>{budget['template_sort']:.2f}</strong> alarm hours per shift. At the shot level, {pct(sl['template_sort'])} of audit-found
-defects (pieces pulled on a clock, independent of the sort) fell on shots the template had alarmed. Every sort-found defect is caught by construction.</p>
-<p>Over the fifteen months the units sorted <strong>{pct(sorted_share, 2)}</strong> of production shots. The review found <strong>{pct(fr, 0)}</strong> of
-sorted shots good: <strong>{good_pieces:,.0f}</strong> good pieces in the reject bin, <strong>${good_cost:,.0f}</strong> at standard cost.</p>
-{table(st, num_cols=("Shots sorted", "Found good at review", "Good pieces sorted", "At standard cost"))}
-<p>All six molds use alarm bands of the same width. On this run the two medical molds together were found good on {pct(med_fr, 0)} of their sorted
-shots against {pct(oth_fr, 0)} for the others; {hi.mold_id} has the highest share ({pct(hi.found_good, 0)}). The difference does not come from the bands, which are the same on every mold.</p>
+defects (pieces pulled on a clock, independent of the sort) fell on shots the template had alarmed. Every sort-found defect tied to a shot is caught by
+construction; those are the medical molds' tray reviews.</p>
+<p>Over the fifteen months the units sorted <strong>{pct(sorted_share, 2)}</strong> of production shots. The reject-bin review found
+<strong>{pct(fr, 0)}</strong> of sorted pieces good: <strong>{good_pieces:,.0f}</strong> good pieces in the reject bin, <strong>${good_cost:,.0f}</strong> at
+standard cost. The medical molds sort into an indexed tray and are reviewed shot by shot; there, {pct(fr_tray, 0)} of sorted shots held no defective piece.
+The other molds' bins are reviewed once per shift, so their results are known per job and shift, not per shot.</p>
+{table(st, num_cols=("Shots sorted", "Sorted pieces found good", "Good pieces sorted", "At standard cost"))}
+<p>All six molds use alarm bands of the same width. The two medical molds returned {pct(med_fr, 0)} of their sorted pieces as good against {pct(oth_fr, 0)}
+for the others; {hi.mold_id} has the highest share ({pct(hi.found_good, 0)}). The difference does not come from the bands, which are the same on every mold.</p>
 <p>The units' recorded alarm states agree with the platform's recomputation from the summary values and templates on
 <strong>{pct(S['unit_agreement'], 2)}</strong> of production shots, so every layer below builds on the alarm logic the technicians see.
 What this layer cannot see are defects that leave no trace in the curve: handling damage, contamination and specks.</p>
@@ -609,7 +617,8 @@ coverage is the main measure, and why it credits a layer for alarming near a def
         ("Unit screen at the press", "Process technician", "Template status, the anomaly state, predicted weight and dimension against tolerance and the last audit"),
         ("Shift chart", "Technician, quality", "Per-shot values with EWMA and drift onset markers; the predicted-dimension trace with audit points"),
         ("Quality dashboard", "Quality engineer, weekly", "Alarms and sorts by mold and lot, false-reject rate, virtual metrology error against each audit, label maturity"),
-        ("Job record", "Customer evidence", "Per-job predicted quality, alarm and sort counts"),
+        ("Job record: the <a href=\"run_report_J-250188.html\">run report</a>", "Quality engineer at job close; customer evidence",
+         "Per-job summary, first-shot approval, curve overlay, distributions, timeline, audit charts, capability, reject-bin review, reaction log"),
     ], columns=["Where", "Who acts on it", "What it shows"])
     s7 = f"""
 {section("budget", "Section 7", "Alarm Budget and How the Outputs Are Used")}

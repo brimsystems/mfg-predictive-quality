@@ -1,16 +1,33 @@
--- Every confirmed defect with where it was found: the sort review and audits link to a shot,
--- packing tallies to a job and hour (cavity on most), returns to a job on most.
+-- Every confirmed defect with where it was found. Indexed-tray reviews (medical molds) and robot-linked audits
+-- carry a shot; per-shift bin reviews carry a job and shift, and their pieces are spread over the shift's hours
+-- in proportion to the shots sorted in each hour; packing tallies carry a job and hour; returns a job on most.
 with sort_codes as (
-    select r.shot_id, unnest(string_split(r.defect_codes, ';')) as defect_code, r.pieces_confirmed_defective,
-           len(string_split(r.defect_codes, ';')) as n_codes
-    from {{ ref('stg_qms__sort_dispositions') }} r where r.pieces_confirmed_defective > 0
+    select r.review_mode, r.shot_id, r.job_id, r.press_id, r.mold_id, r.shift_date, r.shift,
+           split_part(c.code, ':', 1) as defect_code, cast(split_part(c.code, ':', 2) as double) as qty
+    from {{ ref('stg_qms__sort_dispositions') }} r, unnest(string_split(r.defect_codes, ';')) as c(code)
+    where r.pieces_confirmed_defective > 0
+),
+sorted_hours as (
+    select job_id, cast(date_trunc('day', shot_ts - interval 6 hour) as date) as shift_date,
+           case when hour(shot_ts) >= 6 and hour(shot_ts) < 14 then 'A' when hour(shot_ts) >= 14 and hour(shot_ts) < 22 then 'B' else 'C' end as shift,
+           date_trunc('hour', shot_ts) as hour_ts, count(*) as n
+    from {{ ref('fct_shot') }} where unit_sorted and after_approval
+    group by all
+),
+hour_share as (
+    select *, n / sum(n) over (partition by job_id, shift_date, shift) as share from sorted_hours
 )
-select 'sort' as source, s.job_id, s.press_id, s.mold_id, s.shot_id, date_trunc('hour', s.shot_ts) as hour_ts,
-       null::integer as cavity_id, sc.defect_code, ceil(sc.pieces_confirmed_defective / sc.n_codes)::integer as qty
+select 'sort' as source, sc.job_id, sc.press_id, sc.mold_id, sc.shot_id, date_trunc('hour', s.shot_ts) as hour_ts,
+       null::integer as cavity_id, sc.defect_code, sc.qty
 from sort_codes sc join {{ ref('int_shot_context') }} s using (shot_id)
+where sc.review_mode = 'indexed_tray'
+union all
+select 'sort', sc.job_id, sc.press_id, sc.mold_id, null, h.hour_ts, null::integer, sc.defect_code, sc.qty * h.share
+from sort_codes sc join hour_share h using (job_id, shift_date, shift)
+where sc.review_mode = 'per_shift'
 union all
 select 'audit', p.job_id, p.press_id, p.mold_id, p.shot_id, date_trunc('hour', coalesce(s.shot_ts, p.audit_ts)),
-       p.cavity_id, p.defect_code, 1
+       p.cavity_id, p.defect_code, 1.0
 from {{ ref('int_audit_pieces_linked') }} p left join {{ ref('int_shot_context') }} s using (shot_id)
 where p.defect_code is not null
 union all

@@ -7,9 +7,10 @@ tallies, customer returns log.
 Every piece's quality is known from its shot; these are the shop's own
 inspection processes over it, with their coverage and their noise:
 
-  sort review      every shot the unit sorted is reviewed within the shift;
-                   the inspector confirms the defective pieces and returns the
-                   good ones (false rejects)
+  sort review      on the medical molds every sorted shot lands in its own slot of
+                   an indexed tray and is reviewed with its shot; on the others the
+                   bin is reviewed once per shift, by job, with no shot. The
+                   inspector confirms the defective pieces and returns the good ones
   hourly audit     a sample of 6 to 20 pieces pulled by the robot at a recorded
                    cycle (by hand, with no cycle, on the rest): weight and three
                    dimensions through the gauge, and a visual check whose
@@ -29,6 +30,8 @@ import pandas as pd
 from ..config import LABELS as L, MOLDS, RANDOM_SEED, SNAPSHOT_DATE
 from .molding_cell import shift_of
 
+INDEXED_TRAY_MOLDS = ("M-2118", "M-2119")       # medical programs: indexed reject tray, reviewed per shot
+SHIFT_END_H = {"A": 14, "B": 22, "C": 30}
 INSPECTORS = {"A": ["QC-01", "QC-04"], "B": ["QC-02", "QC-05"], "C": ["QC-03", "QC-06"]}
 # visual finding strictness per inspector on cosmetic codes; the newest are the most variable
 STRICTNESS = {"QC-01": 1.0, "QC-02": 1.22, "QC-03": 0.82, "QC-04": 1.10, "QC-05": 0.75, "QC-06": 1.28}
@@ -50,19 +53,50 @@ def build_labels(cell: dict, parts: pd.DataFrame):
     defects["defect_id"] = np.arange(1, len(defects) + 1)
 
     # ── Sort review ─────────────────────────────────────────────────────────
-    sorted_shots = shots[(shots["sort_signal"] == "reject") & shots["in_production"]]
+    # Medical molds sort into an indexed tray, one slot per shot, and each slot is reviewed with its
+    # shot. The other molds sort into one bin that is reviewed once per shift: the review records the
+    # job, shift and counts, with no shot.
+    sorted_shots = shots[(shots["sort_signal"] == "reject") & shots["in_production"]].copy()
     d_sorted = defects[defects["sort_signal"] == "reject"]
     found = d_sorted[rng.random(len(d_sorted)) > L["review_miss"]]
-    by_shot = found.groupby("shot_id").agg(n=("defect_code", "size"), codes=("defect_code", lambda s: ";".join(sorted(set(s)))))
-    sd = sorted_shots[["shot_id", "shot_ts", "active_cavities"]].merge(by_shot, on="shot_id", how="left")
-    sd["n"] = sd["n"].fillna(0).astype(int)
-    rev = sd["shot_ts"] + pd.to_timedelta(rng.uniform(0.3, 6.5, len(sd)), unit="h")
-    sort_disp = pd.DataFrame(dict(
-        shot_id=sd["shot_id"], reviewed_ts=rev.dt.floor("min"),
-        inspector_id=[rng.choice(INSPECTORS[shift_of(t)]) for t in sd["shot_ts"]],
-        pieces_reviewed=sd["active_cavities"], pieces_confirmed_defective=sd["n"],
-        defect_codes=sd["codes"], pieces_good=sd["active_cavities"] - sd["n"]))
     defects["caught_by"] = np.where(defects["defect_id"].isin(found["defect_id"]), "sort", None)
+    sorted_shots["shift"] = [shift_of(t) for t in sorted_shots["shot_ts"]]
+    sorted_shots["shift_date"] = (sorted_shots["shot_ts"] - pd.Timedelta(hours=6)).dt.normalize()
+    sorted_shots["indexed"] = sorted_shots["mold_id"].isin(INDEXED_TRAY_MOLDS)
+
+    def codes_of(frame):
+        c = frame["defect_code"].value_counts().sort_index()
+        return ";".join(f"{k}:{v}" for k, v in c.items()) or None
+
+    rows = []
+    tray = sorted_shots[sorted_shots["indexed"]]
+    f_by_shot = {k: g for k, g in found.groupby("shot_id")}
+    for r in tray.itertuples():
+        g = f_by_shot.get(r.shot_id)
+        n = 0 if g is None else len(g)
+        rows.append(dict(review_mode="indexed_tray", shot_id=r.shot_id, job_id=r.true_job_id, press_id=r.press_id,
+                         mold_id=r.mold_id, shift_date=r.shift_date.date(), shift=r.shift,
+                         reviewed_ts=(r.shot_ts + pd.Timedelta(hours=float(rng.uniform(0.3, 6.5)))).floor("min"),
+                         inspector_id=str(rng.choice(INSPECTORS[r.shift])), sorted_shots=1,
+                         pieces_reviewed=int(r.active_cavities), pieces_confirmed_defective=n,
+                         defect_codes=None if g is None else codes_of(g), pieces_good=int(r.active_cavities) - n))
+    bins = sorted_shots[~sorted_shots["indexed"]]
+    found_ctx = found.merge(bins[["shot_id", "shift_date", "shift"]], on="shot_id")
+    f_by_bin = {k: g for k, g in found_ctx.groupby(["true_job_id", "shift_date", "shift"])}
+    for (job, sdate, shift), g in bins.groupby(["true_job_id", "shift_date", "shift"]):
+        fg = f_by_bin.get((job, sdate, shift))
+        n = 0 if fg is None else len(fg)
+        pieces = int(g["active_cavities"].sum())
+        shift_end = sdate + pd.Timedelta(hours=SHIFT_END_H[shift])
+        rows.append(dict(review_mode="per_shift", shot_id=None, job_id=job, press_id=g["press_id"].iat[0],
+                         mold_id=g["mold_id"].iat[0], shift_date=sdate.date(), shift=shift,
+                         reviewed_ts=(shift_end + pd.Timedelta(minutes=float(rng.uniform(10, 90)))).floor("min"),
+                         inspector_id=str(rng.choice(INSPECTORS[shift])), sorted_shots=len(g),
+                         pieces_reviewed=pieces, pieces_confirmed_defective=n,
+                         defect_codes=None if fg is None else codes_of(fg), pieces_good=pieces - n))
+    sort_disp = pd.DataFrame(rows).sort_values("reviewed_ts").reset_index(drop=True)
+    sort_disp.insert(0, "review_id", [f"RB-{i + 1}" for i in range(len(sort_disp))])
+    sort_disp["shot_id"] = sort_disp["shot_id"].astype("Int64")
 
     # ── Audits ──────────────────────────────────────────────────────────────
     plan = cell["audit_plan"].merge(shots[["shot_id", "shot_ts", "cycle_no"]], on="shot_id")

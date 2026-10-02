@@ -40,11 +40,14 @@ def _fit(tr, va, feats, target, seed):
     return m
 
 
-def predict_shots(shots, kind):
-    """Predicted value per shot and cavity from the saved pooled model, in engineering units."""
-    meta = json.loads((MODELS / f"vm_{kind}_pooled.meta.json").read_text())
-    m = xgb.XGBRegressor()
-    m.load_model(MODELS / f"vm_{kind}_pooled.json")
+def predict_shots(shots, kind, model=None, meta=None):
+    """Predicted value per shot and cavity (target scale: weight as a fraction of nominal, dimension in
+    tolerance units) from the saved pooled model, or from the model given."""
+    if model is None:
+        meta = json.loads((MODELS / f"vm_{kind}_pooled.meta.json").read_text())
+        model = xgb.XGBRegressor()
+        model.load_model(MODELS / f"vm_{kind}_pooled.json")
+    m = model
     rows = []
     for cav in range(1, int(shots["cavities"].max()) + 1):
         g = shots[shots["cavities"] >= cav].copy()
@@ -54,6 +57,22 @@ def predict_shots(shots, kind):
         g["cavity_key"] = (g["cell_code"] * 32 + cav).astype(int)
         rows.append(pd.DataFrame(dict(shot_id=g["shot_id"], cavity_id=cav, y=m.predict(g[meta["features"]]))))
     return pd.concat(rows, ignore_index=True)
+
+
+def backtest(kind, train_end, eval_start, eval_end, seed=11, feats=None):
+    """Pooled model trained on pieces before train_end (its last month held out for early stopping),
+    evaluated on pieces in [eval_start, eval_end). Returns metrics, the model and its meta."""
+    df = prepare(load_audit_pieces())
+    feats = feats or ALL
+    f = feats + ["cell_code", "cavity_key"]
+    stop = pd.Timestamp(train_end) - pd.DateOffset(months=1)
+    tr = df[df["shot_ts"] < stop]
+    va = df[(df["shot_ts"] >= stop) & (df["shot_ts"] < pd.Timestamp(train_end))]
+    te = df[(df["shot_ts"] >= pd.Timestamp(eval_start)) & (df["shot_ts"] < pd.Timestamp(eval_end))]
+    m = _fit(tr, va, f, f"y_{kind}", seed)
+    p = _unscale(te, pd.Series(m.predict(te[f]), index=te.index), kind)
+    cats = dict(zip(df["cell"].astype("category").cat.categories, range(len(df["cell"].astype("category").cat.categories))))
+    return metrics(te, p, kind), m, dict(features=f, cell_codes=cats)
 
 
 def _unscale(df, pred, kind):

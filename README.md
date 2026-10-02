@@ -25,18 +25,18 @@ What the shop lacked was the connection. The units kept per-shot values for abou
 
 Test period December 2025 to March 2026; models trained through September 2025 and validated on October and November; five seeds.
 
-**Layer comparison.** Confirmed defective pieces (sort review, audits, packing tallies) credited at the job-hour grain to the first layer that alarmed on the job:
+**Layer comparison.** Confirmed defective pieces (sort review, audits, packing tallies) credited at the job-hour grain to the layer that alarmed first in time on the job:
 
 | Layer | Share of confirmed defects | Alarms per shift |
 |---|---|---|
-| Template alarms and sort | 57.3% | 2.21 alarm hours (sort is automatic) |
-| Control-chart rules 1 and 2 on every shot | +8.3 points | 0.96 |
-| Drift detection | +5.6 points | 0.60 |
-| Virtual metrology (dimensional codes) | +0.0 points | 0.01 |
-| Anomaly model | +3.0 points | 1.71 |
+| Template alarms and sort | 47.6% | 2.21 alarm hours (sort is automatic) |
+| Control-chart rules 1 and 2 on every shot | +8.2 points | 0.96 |
+| Drift detection | +14.4 points | 0.60 |
+| Virtual metrology (dimensional codes) | +0.0 points | 0.08 |
+| Anomaly model | +4.0 points | 1.71 |
 | Caught by none | 25.8% | |
 
-The deployed rules, drift signals and anomaly model together raise 3.3 technician alarms per shift, inside the three to six one technician can investigate. Rules 4 and 5 are not deployed on every shot: cavity pressure values are autocorrelated from shot to shot, and rule 5 fires on 75% of points. Linkage coverage: 28% of confirmed defective pieces can be tied to a shot.
+The added layers (rules, drift, virtual metrology and the anomaly model) together raise 3.4 technician alarms per shift, inside the three to six one technician can investigate. Rules 4 and 5 are not deployed on every shot: cavity pressure values are autocorrelated from shot to shot, and rule 5 fires on 75% of points. Linkage coverage: 28% of confirmed defective pieces can be tied to a shot.
 
 **Virtual metrology** is the model that earns its place, because its labels are abundant (186,769 audited pieces, 88% linked to their shot). Pooled model on the test period: part weight RMSE 1.36 times the gauge R&R (R² 0.63), critical dimension 1.76 times (R² 0.85). Without the cavity pressure values the dimension error rises to 3.4 times gauge.
 

@@ -72,6 +72,28 @@ def evaluate(lab, target, feats=ALL, seeds=SEEDS):
     return rows
 
 
+def evaluate_audit_only(lab, feats=ALL, seeds=SEEDS):
+    """Trained as usual; scored only on test shots the robot sampled at a recorded cycle, with the audit's
+    own finding as the label. These pieces were pulled on a clock, not because the template sorted them."""
+    tr, va = lab[lab["split"] == "train"], lab[lab["split"] == "valid"]
+    te = lab[(lab["split"] == "test") & lab["audit_pieces"].notna()].copy()
+    y = (te["audit_rejects"].fillna(0) > 0).astype(int).to_numpy()
+    rate = float((te["unit_alarm_state"] == "alarm").mean())
+    tmpl = te["max_abs_dev"].fillna(0).to_numpy()
+    n_pos = int(lab.loc[lab["split"] == "train", "y_any"].sum())
+    rows = []
+    for s in seeds:
+        m = xgb.XGBClassifier(n_estimators=800, learning_rate=0.03, max_depth=4, subsample=0.8, colsample_bytree=0.8,
+                              min_child_weight=5, scale_pos_weight=max(1.0, (len(tr) - n_pos) / n_pos),
+                              eval_metric="aucpr", early_stopping_rounds=60, random_state=s, tree_method="hist")
+        m.fit(tr[feats], tr["y_any"], eval_set=[(va[feats], va["y_any"])], verbose=False)
+        p = m.predict_proba(te[feats])[:, 1]
+        rows.append(dict(seed=s, n_test=len(te), n_test_pos=int(y.sum()), alarm_rate=rate,
+                         recall_model=recall_at_rate(y, p, rate), recall_template=recall_at_rate(y, tmpl, rate),
+                         ap_model=float(average_precision_score(y, p)), ap_template=float(average_precision_score(y, tmpl))))
+    return pd.DataFrame(rows)
+
+
 def run(df, feats=ALL, tag="full"):
     lab = labeled(df)
     rows = []

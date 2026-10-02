@@ -2,8 +2,8 @@
 Layer comparison at the job-hour grain, and the alarm budget.
 
 For each confirmed defect (sort review, audit or packing tally) in a job-hour, the
-first layer in this order that raised an alarm on the same job within its look-back
-is credited:
+layer that alarmed first in time on the same job, within its look-back, is credited
+(ties go to the earlier layer in this list):
 
   1. template alarms and sort: the unit alarmed on the job in the hour or the two before
   2. control-chart rules on every shot, at the deployed rule set (rules 1 and 2)
@@ -44,17 +44,20 @@ def alarms_per_shift(signal_hours, n_hours):
 
 
 def compare(defects, signals):
-    """signals: ordered list of (layer, set of (job_id, hour))."""
+    """signals: ordered list of (layer, set of (job_id, hour)). Each defect is credited to the layer whose alarm came
+    first in time within its look-back; ties go to the earlier layer in the list."""
     credit = []
     for r in defects.itertuples():
-        who = "none"
+        best, best_k = "none", -1
         for name, sig in signals:
             if name == "virtual_metrology" and r.defect_code != "dimensional":
                 continue
-            if any((r.job_id, r.hour_ts - pd.Timedelta(hours=k)) in sig for k in range(LOOKBACK[name] + 1)):
-                who = name
-                break
-        credit.append(who)
+            for k in range(LOOKBACK[name], -1, -1):          # earliest hour first
+                if (r.job_id, r.hour_ts - pd.Timedelta(hours=k)) in sig:
+                    if k > best_k:
+                        best, best_k = name, k
+                    break
+        credit.append(best)
     d = defects.assign(layer=credit)
     share = d.groupby("layer")["qty"].sum() / d["qty"].sum()
     dim = d[d["defect_code"] == "dimensional"]

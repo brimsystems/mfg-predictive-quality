@@ -1,7 +1,7 @@
 """
 MLOps monitoring: label maturity, alarm-rate drift per layer, expected feature shifts after
 equipment events, and virtual metrology error tracked against each audit as it arrives,
-with the retraining rule.
+with the investigation rule between the monthly retrains.
 
 Usage: python ml/reports/generate_monitoring_report.py
 """
@@ -14,10 +14,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ml.reports import results as RS  # noqa: E402
 from ml.reports.style import ACCENT, AMBER, BRAND_BLUE, GREEN, GREY, LIGHT_BLUE, RED, fig, img, pct, shell, table  # noqa: E402
-from ml.src.features import DATA_DIR, VALID_END  # noqa: E402
+EVAL_START = pd.Timestamp("2025-05-01")
 
 OUT = Path(__file__).resolve().parent / "monitoring_report.html"
-RETRAIN = {"weight": 1.5, "dimension": 2.0}      # rolling error over gauge that triggers retraining
+RETRAIN = {"weight": 1.5, "dimension": 3.0}      # rolling error over gauge that triggers an investigation before the monthly retrain
 WINDOW = 200                                     # audit pieces in the rolling window
 
 
@@ -81,7 +81,7 @@ def event_shifts():
 
 def vm_tracking(R):
     p = R["vm_pred"]
-    p = p[p["design"] == "pooled"].sort_values("shot_ts").copy()
+    p = p.sort_values("shot_ts").copy()
     parts = R["parts"].set_index("mold_id")
     p["mold_id"] = p["cell"].str.split(" / ").str[0]
     p["gauge"] = np.where(p["target"] == "weight", p["mold_id"].map(parts["gauge_sd_weight_g"]),
@@ -101,15 +101,13 @@ def main():
     R = RS.load()
     mat = maturity()
     wl = weekly_layers(R)
-    an = pd.read_parquet(DATA_DIR / "results" / "anomaly_if_scores.parquet")
-    an = an[an["seed"] == an["seed"].min()]
     es = event_shifts()
     tr = vm_tracking(R)
 
     f, ax = fig(3.2)
     for c, col in zip(wl.columns, [GREY, ACCENT, AMBER]):
         ax.plot(wl.index, wl[c], label=c, color=col, lw=1.4)
-    ax.axvline(VALID_END, color="#999", ls=":", lw=1)
+    ax.axvline(EVAL_START, color="#999", ls=":", lw=1)
     ax.set_ylabel("alarm hours per shift")
     ax.legend(frameon=False)
     layers_png = img(f, "alarm rate by week")
@@ -122,6 +120,8 @@ def main():
         ax.set_title(f"{t} (retrain above {RETRAIN[t]}x)", fontsize=11)
         ax.tick_params(axis="x", rotation=45, labelsize=8)
     axes[0].set_ylabel(f"rolling RMSE over gauge ({WINDOW} pieces)")
+    for ax in axes:
+        ax.axvspan(pd.Timestamp("2025-06-01"), pd.Timestamp("2025-10-01"), color="#FBEBD3", alpha=0.5, lw=0)
     axes[1].legend(frameon=False, fontsize=7, loc="upper left", bbox_to_anchor=(1.0, 1.0))
     track_png = img(f, "virtual metrology tracking")
     trig = tr[tr["triggered"]].groupby(["target", "cell"])["shot_ts"].min().reset_index()
@@ -139,8 +139,9 @@ def main():
     prov = int((~jobs["is_matured"]).sum())
 
     body = f"""
-<div class="note">Three things are watched between retrains: whether labels are complete enough to score against, whether each alarm layer's rate
-is drifting, and whether the per-shot measurement still sits within its gauge-error band. The retraining rule acts only on matured labels.</div>
+<div class="note">Virtual metrology and the anomaly model are retrained at the start of every month on all earlier data. Three things are watched
+between retrains: whether labels are complete enough to score against, whether each alarm layer's rate is drifting, and whether the per-shot
+measurement still sits within its gauge-error band. The investigation rule acts only on matured labels.</div>
 
 <h2 id="maturity">Label maturity</h2>
 <p>Most of a job's confirmed defects are known within a day of its last shot, because the sort review and the packing tallies close within the shift;
@@ -149,8 +150,9 @@ extract date.</p>
 {table(matt)}
 
 <h2 id="alarm-drift">Alarm-rate drift per layer</h2>
-<p>Alarm hours per shift by week, for the template alarms, the deployed rules and drift onsets. A layer's rate that moves outside its range for two
-weeks is investigated before any threshold is changed; the dotted line marks the start of the test period.</p>
+<p>Alarm hours per shift by week, for the template alarms, the rules at their deployed limits (4.05 and 2.70 sigma) and drift onsets. A layer's rate
+that moves outside its range for two weeks is investigated before any threshold is changed; the dotted line marks the start of the evaluation period,
+May 2025.</p>
 {layers_png}
 
 <h2 id="shifts">Expected feature shifts after equipment events</h2>
@@ -161,13 +163,15 @@ include the template re-establishment's own shift; the ring replacement's cushio
 {table(esf)}
 
 <h2 id="vm-tracking">Virtual metrology against each audit</h2>
-<p>Each audit piece is scored against its shot's prediction as it arrives. The retraining rule: retrain when the rolling error over the last
-{WINDOW} pieces of a mold and press stays above {RETRAIN['weight']}x gauge on weight or {RETRAIN['dimension']}x on the dimension for {2 * WINDOW} consecutive pieces,
-using only matured labels. Over the test period the rule {trig_text}.</p>
+<p>Each audit piece is scored against the prediction made for its shot by the model in force that month. The investigation rule: when the rolling
+error over the last {WINDOW} pieces of a mold and press stays above {RETRAIN['weight']}x gauge on weight or {RETRAIN['dimension']}x on the dimension for
+{2 * WINDOW} consecutive pieces, the mold and press is investigated before the next monthly retrain, using only matured labels. The dimension limit
+sits higher than the weight limit because the dimension error normally runs two to three times gauge, and higher in the warm months (shaded), when mold
+temperature moves the part. Over the evaluation period the rule {trig_text}.</p>
 {track_png}
 """
     toc = [("maturity", "Maturity"), ("alarm-drift", "Alarm drift"), ("shifts", "Event shifts"), ("vm-tracking", "Measurement tracking")]
-    OUT.write_text(shell("Model Monitoring", "Molding quality · MLOps", "Test period December 2025 to March 2026", body, toc), encoding="utf-8")
+    OUT.write_text(shell("Model Monitoring", "Molding quality · MLOps", "Evaluation May 2025 to March 2026, models retrained monthly", body, toc), encoding="utf-8")
     print("wrote", OUT)
 
 

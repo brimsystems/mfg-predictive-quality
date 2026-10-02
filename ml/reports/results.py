@@ -28,15 +28,16 @@ def q(sql):
 def load():
     R = {}
     R["checks"] = json.loads((REF / "checks.json").read_text())
-    R["layers"] = json.loads((RES / "layers.json").read_text())["layers"]
-    R["anomaly"] = json.loads((RES / "anomaly_summary.json").read_text())
-    R["anomaly_events"] = pd.read_csv(RES / "anomaly_events.csv", parse_dates=["start"])
-    R["anomaly_im12"] = pd.read_csv(RES / "anomaly_im12_by_month.csv")
-    R["vm"] = pd.read_csv(RES / "vm_metrics_full.csv")
-    R["vm_abl"] = pd.read_csv(RES / "vm_ablations.csv")
-    R["vm_pred"] = pd.read_parquet(RES / "vm_test_predictions_full.parquet")
+    R["M"] = json.loads((RES / "measures.json").read_text())
+    R["DM"] = json.loads((RES / "drift_mechanisms.json").read_text())
+    R["ae"] = json.loads((RES / "autoencoder_summary.json").read_text())
+    R["anomaly_events"] = pd.read_csv(RES / "measures_anomaly_events.csv", parse_dates=["start"])
+    R["anomaly_thresholds"] = pd.read_csv(RES / "rolling_anomaly_thresholds.csv", parse_dates=["month"])
+    R["vm_month"] = pd.read_csv(RES / "rolling_vm_metrics.csv", parse_dates=["month"])
+    R["vm_pred"] = pd.read_parquet(RES / "rolling_vm_predictions.parquet")
     R["defect"] = pd.read_csv(RES / "defect_metrics_full.csv")
     R["defect_abl"] = pd.read_csv(RES / "defect_ablations.csv")
+    R["audit_only"] = json.loads((RES / "defect_audit_only.json").read_text())["mean"]
 
     s = q("""
         select count(*) as shots, count(*) filter (where after_approval) as prod_shots,
@@ -88,21 +89,34 @@ def check(R, name_part):
     raise KeyError(name_part)
 
 
-def vm_summary(R, design="pooled"):
-    v = R["vm"][R["vm"]["design"] == design]
-    return v.groupby(["target", "cell"])[["rmse", "gauge_sd", "rmse_over_gauge", "r2", "calibration_slope", "residual_lag1"]].mean().reset_index()
+WARM = ("2025-06-01", "2025-10-01")
 
 
-def vm_headline(R):
+def vm_overall(R, variant="full"):
+    """Rolling-origin virtual metrology, medians over mold and press of the monthly per-cell metrics: overall, warm months
+    (June to September 2025) and the other months."""
+    v = R["vm_month"][R["vm_month"]["variant"] == variant].copy()
+    v["warm"] = (v["month"] >= WARM[0]) & (v["month"] < WARM[1])
+    cols = ["rmse_over_gauge", "r2", "calibration_slope"]
     out = {}
-    for design in ("pooled", "per_cell"):
-        v = R["vm"][R["vm"]["design"] == design]
-        per_seed = v.groupby(["target", "seed"])[["rmse_over_gauge", "r2"]].median()
-        for t in ("weight", "dimension"):
-            ps = per_seed.loc[t]
-            out[(design, t)] = dict(ratio=float(ps["rmse_over_gauge"].mean()), ratio_sd=float(ps["rmse_over_gauge"].std()),
-                                    r2=float(ps["r2"].mean()), r2_sd=float(ps["r2"].std()))
+    for t, g in v.groupby("target"):
+        out[t] = dict(all=g[cols].median().to_dict(), warm=g[g["warm"]][cols].median().to_dict(), other=g[~g["warm"]][cols].median().to_dict())
     return out
+
+
+def vm_by_cell(R):
+    """Per mold and press, pooled over the eleven evaluation months: error over gauge, R2 and calibration."""
+    p = R["vm_pred"].copy()
+    gauge = R["vm_month"][R["vm_month"]["variant"] == "full"].groupby(["target", "cell"])["gauge_sd"].first()
+    rows = []
+    for (t, cell), g in p.groupby(["target", "cell"]):
+        err = g["measured"] - g["predicted"]
+        ss = ((g["measured"] - g["measured"].mean()) ** 2).sum()
+        rmse = float(np.sqrt((err ** 2).mean()))
+        rows.append(dict(target=t, cell=cell, n=len(g), rmse=rmse, gauge_sd=float(gauge.get((t, cell), np.nan)),
+                         rmse_over_gauge=rmse / float(gauge.get((t, cell), np.nan)), r2=float(1 - (err ** 2).sum() / ss),
+                         calibration_slope=float(np.polyfit(g["predicted"], g["measured"], 1)[0])))
+    return pd.DataFrame(rows)
 
 
 def defect_table(R, tag_df=None):
@@ -117,19 +131,15 @@ def defect_table(R, tag_df=None):
     return g
 
 
-def layer_table(R):
-    L = R["layers"]["share"]
-    order = [("template_sort", "Template alarms and sort"), ("rules", "Control-chart rules on every shot"),
-             ("drift", "Drift detection"), ("virtual_metrology", "Virtual metrology (dimensional codes)"),
-             ("anomaly", "Anomaly model"), ("none", "Caught by none")]
-    rows = []
-    for k, label in order:
-        rows.append(dict(layer=label, share=L.get(k, 0.0),
-                         alarms_per_shift=R["layers"]["alarms_per_shift"].get(k, np.nan)))
-    return pd.DataFrame(rows)
+def vm_shots(shot_ids):
+    """Predicted weight (fraction of nominal) and dimension (tolerance units) per shot and cavity, from the rolling-origin
+    model in force that month."""
+    ids = pd.Index(shot_ids).unique()
+    p = pd.read_parquet(RES / "rolling_vm_shot.parquet", filters=[("shot_id", "in", list(map(int, ids)))])
+    return p
 
 
-def linkage(R):
-    c = R["confirmed"]
-    c = c[c["source"].isin(["sort", "audit", "tally", "return"])]
-    return float(c["linked"].sum() / c["qty"].sum())
+def anomaly_shots(shot_ids=None):
+    """Anomaly score, raw flag and alarm state per monitored shot, from the rolling-origin model in force that month."""
+    a = pd.read_parquet(RES / "rolling_anomaly.parquet")
+    return a if shot_ids is None else a[a["shot_id"].isin(set(shot_ids))]

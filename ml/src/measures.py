@@ -5,11 +5,11 @@ Per-layer measures at the deployed thresholds, May 2025 to March 2026 (the rolli
                 under 30 shots, are one investigation)
   shot_level    defective against good audited pieces flagged, by layer and defect group, with the incremental
                 column (template, rules, drift, anomaly, virtual metrology in that order); warm months separately
-  drift_lead    for flow-front, fill-volume and packing-variability episodes: a firing of the relevant drift detector
-                on that mold in the preceding window, and the lead in shots, against random production shots
-  vent_check    the end-of-fill CUSUM (deployed) against the burn rise, per vent-cleaning interval
+  job_hour      the earlier job-hour coverage and its chance level, for the technical report's note on it
   anomaly       novel events in the period: flagged, flagged before the template, lead to the first response
   vm            error against gauge R&R, R2 and calibration by month and mold, the ablation without cavity pressure
+
+Drift detectors are tested against their own mechanisms in drift_mechanisms.py.
 
 Usage: python -m ml.src.measures
 """
@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 
 from . import anomaly_eval
-from .detection import GROUP_OF, GROUPS, boot
 from .features import DATA_DIR, ROOT, connect, load_shots
 
 
@@ -29,11 +28,32 @@ START, END = pd.Timestamp("2025-05-01"), pd.Timestamp("2026-04-01")
 WARM = (pd.Timestamp("2025-06-01"), pd.Timestamp("2025-10-01"))
 ORDER = ["template_sort", "rules", "drift", "anomaly", "virtual_metrology"]
 GAP = 30
+B = 400
+GROUPS = {"Fill volume": ["short_shot", "flash"], "Packing and shrinkage": ["sink", "void", "dimensional", "warp"],
+          "Flow front": ["weld_line", "burn"], "Gate and other": ["gate_vestige", "other"],
+          "Material": ["splay", "black_specks", "contamination"]}
+GROUP_OF = {c: g for g, cs in GROUPS.items() for c in cs}
 VM_DEPLOYED = 0.75               # advisory audit when a cavity's predicted dimension passes 75% of tolerance (deployed)
-LEAD_WINDOW = 6000
-DRIFT_FOR = {"Flow front": (["burn", "weld_line"], "cusum_eof"),
-             "Fill volume": (["short_shot", "flash"], "ewma_fill"),
-             "Packing variability": (["sink", "void"], "cusum_pack_var")}
+
+
+def boot(flag, defect, audit, rng, key_mask):
+    """Bootstrap over audits: rate among defective pieces, rate among good pieces, and the difference."""
+    f = np.nan_to_num(flag.astype(float))
+    dk = defect.astype(bool) & key_mask.astype(bool)
+    gd = ~defect.astype(bool)
+    d = pd.DataFrame({"a": audit, "fd": f * dk, "nd": dk.astype(float), "fg": f * gd, "ng": gd.astype(float)})
+    A = d.groupby("a")[["fd", "nd", "fg", "ng"]].sum().to_numpy()
+    tot = A.sum(0)
+    rd, rg = tot[0] / max(tot[1], 1), tot[2] / max(tot[3], 1)
+    idx = rng.integers(0, len(A), size=(B, len(A)))
+    S = A[idx].sum(1)
+    bd = S[:, 0] / np.maximum(S[:, 1], 1)
+    bg = S[:, 2] / np.maximum(S[:, 3], 1)
+    diff = bd - bg
+    return dict(n_defective=int(tot[1]), n_good=int(tot[3]), rate_defective=float(rd), rate_good=float(rg), above_chance=float(rd - rg),
+                ci_defective=[float(np.quantile(bd, .025)), float(np.quantile(bd, .975))],
+                ci_good=[float(np.quantile(bg, .025)), float(np.quantile(bg, .975))],
+                ci_above_chance=[float(np.quantile(diff, .025)), float(np.quantile(diff, .975))])
 
 
 def episodes(shots, flag):
@@ -44,7 +64,7 @@ def episodes(shots, flag):
 
 def shot_flags(df):
     an = pd.read_parquet(RESULTS / "rolling_anomaly.parquet")
-    vd = pd.read_parquet(RESULTS / "rolling_vm_shot_dimension.parquet")
+    vd = pd.read_parquet(RESULTS / "rolling_vm_shot.parquet", columns=["shot_id", "cavity_id", "dim_pred"])
     s = df[(df["shot_ts"] >= START) & (df["shot_ts"] < END) & df["after_approval"]].sort_values(["job_id", "shot_ts"]).copy()
     s["pos"] = s.groupby("job_id").cumcount()
     s["template_sort"] = s["unit_alarm_state"] == "alarm"
@@ -64,6 +84,24 @@ def budget(s):
     out["added_layers_total"] = sum(out[l]["episodes_per_shift"] for l in ORDER[1:])
     out["shifts"] = shifts
     return out
+
+
+def rules_at(s, c=1.0):
+    """Episodes per shift rules 1 and 2 would raise at c times the textbook limits (c = 1: 3 and 2 sigma)."""
+    con = connect()
+    pts = con.execute(f"""select shot_id, job_id, sensor_id, metric, z from spc_chart_points where is_monitoring
+                          and shot_ts >= '{START}' and shot_ts < '{END}' order by job_id, sensor_id, metric, shot_ts""").df()
+    con.close()
+    key = (pts["job_id"] + "|" + pts["sensor_id"] + "|" + pts["metric"]).to_numpy()
+    z = pts["z"].fillna(0).to_numpy()
+    w2 = np.zeros(len(z), bool)
+    for side in (1, -1):
+        r = pd.Series((side * z > 2 * c).astype(int)).groupby(key).transform(lambda x: x.rolling(3, min_periods=1).sum())
+        w2 |= r.to_numpy() >= 2
+    flagged = set(pts.loc[(np.abs(z) > 3 * c) | w2, "shot_id"])
+    shifts = s["shot_ts"].dt.floor("h").nunique() / 8
+    f = s["shot_id"].isin(flagged)
+    return dict(limits=[3 * c, 2 * c], shots_flagged=float(f.mean()), episodes_per_shift=episodes(s, f) / shifts)
 
 
 def shot_level(s, vd, rng):
@@ -104,6 +142,18 @@ def shot_level(s, vd, rng):
         w = ap["warm"].to_numpy()
         out["incremental_warm"][l] = table(ap[w], inc[w])
         earlier |= ap[l].to_numpy(bool)
+    # by individual code: the template, and any layer
+    any_layer = np.zeros(len(ap), bool)
+    for l in ORDER:
+        any_layer |= ap[l].to_numpy(bool)
+    out["by_code"] = {}
+    for code in GROUP_OF:
+        mask = (ap["defect_code"] == code).to_numpy()
+        if mask.sum() == 0:
+            continue
+        t = boot(ap["template_sort"].to_numpy(), ap["defective"].to_numpy(), ap["audit_id"].to_numpy(), rng, mask)
+        a_ = boot(any_layer, ap["defective"].to_numpy(), ap["audit_id"].to_numpy(), rng, mask)
+        out["by_code"][code] = dict(group=GROUP_OF[code], n_defective=t["n_defective"], template=t, any_layer=a_)
     spc = (ap["template_sort"] | ap["rules"] | ap["drift"]).to_numpy()
     ml = ap["ml_layers"].to_numpy() & ~spc
     out["incremental"]["ml_layers"] = table(ap, ml)
@@ -112,93 +162,47 @@ def shot_level(s, vd, rng):
     return out
 
 
-def mold_positions(df):
-    s = df[df["after_approval"]].sort_values(["mold_id", "shot_ts"])[["shot_id", "mold_id", "job_id", "shot_ts"]].copy()
-    s["mpos"] = s.groupby("mold_id").cumcount()
-    return s
-
-
-def drift_lead(df, rng):
+def context_15_months(df, rng):
+    """Template, rules and drift over all fifteen months of audits (January 2025 to March 2026), as context for the
+    evaluation-period table; and the share of defective audited pieces that fall in January to April 2025."""
     con = connect()
-    st = con.execute("select * from drift_shot_state").df()
-    cd = con.execute(f"""select job_id, mold_id, hour_ts, defect_code from fct_confirmed_defects
-                         where source in ('sort', 'audit', 'tally') and job_id is not null""").df()
+    ap = con.execute("""select a.audit_id, a.defect_code, a.shot_ts, s.unit_alarm_state = 'alarm' as template_sort,
+                               s.spc_we1 or s.spc_we2 as rules, s.drift_any_signal as drift
+                        from fct_audit_piece a join fct_shot s using (shot_id) where a.linked_to_shot and a.after_approval""").df()
     con.close()
-    pos = mold_positions(df).merge(st, on="shot_id", how="left")
-    out = {}
-    for name, (codes, det) in DRIFT_FOR.items():
-        ev = cd[cd["defect_code"].isin(codes)].sort_values(["mold_id", "hour_ts"])
-        ev = ev[(ev["hour_ts"] >= START) & (ev["hour_ts"] < END)]
-        # an episode: confirmed defects of the group on a mold, a gap of more than one shift starting a new one
-        ev["new"] = ev.groupby("mold_id")["hour_ts"].diff().fillna(pd.Timedelta(days=999)) > pd.Timedelta(hours=8)
-        starts = ev[ev["new"]]
-        rows = []
-        for m, g in starts.groupby("mold_id"):
-            pm = pos[pos["mold_id"] == m]
-            if pm[f"{det}_fire"].isna().all():
-                continue                                    # this mold does not carry the detector (no end-of-fill sensor)
-            ts = pm["shot_ts"].to_numpy()
-            fires = pm["mpos"].to_numpy()[pm[f"{det}_fire"].fillna(False).to_numpy(bool)]
-            in_period = pm[(pm["shot_ts"] >= START) & (pm["shot_ts"] < END) & (pm["mpos"] >= LEAD_WINDOW)]["mpos"].to_numpy()
-
-            def look(p0):
-                f = fires[(fires < p0) & (fires >= p0 - LEAD_WINDOW)]
-                return (True, int(p0 - f.max()), int(p0 - f.min())) if len(f) else (False, np.nan, np.nan)
-            for h in g["hour_ts"]:
-                i = np.searchsorted(ts, np.datetime64(h))
-                if i >= len(ts) or i < LEAD_WINDOW:
-                    continue
-                hit, last, first = look(int(pm["mpos"].iloc[i]))
-                rows.append(dict(mold_id=m, kind="episode", fired=hit, lead_last=last, lead_first=first))
-            for p0 in rng.choice(in_period, size=min(400, len(in_period)), replace=False) if len(in_period) else []:
-                hit, last, first = look(int(p0))
-                rows.append(dict(mold_id=m, kind="random", fired=hit, lead_last=last, lead_first=first))
-        r = pd.DataFrame(rows)
-        if r.empty:
-            continue
-        e, c = r[r["kind"] == "episode"], r[r["kind"] == "random"]
-        out[name] = dict(detector=det, window_shots=LEAD_WINDOW, episodes=int(len(e)), molds=sorted(e["mold_id"].unique()),
-                         preceded=float(e["fired"].mean()), chance=float(c["fired"].mean()),
-                         median_lead_last=float(e["lead_last"].median()), median_lead_first=float(e["lead_first"].median()),
-                         by_mold={m: dict(episodes=int((e["mold_id"] == m).sum()), preceded=float(e.loc[e["mold_id"] == m, "fired"].mean()),
-                                          chance=float(c.loc[c["mold_id"] == m, "fired"].mean()))
-                                  for m in e["mold_id"].unique()})
+    ap["defective"] = ap["defect_code"].notna()
+    ap["group"] = ap["defect_code"].map(GROUP_OF)
+    out = {"n_audit_pieces": int(len(ap)), "n_defective": int(ap["defective"].sum()),
+           "early_share_of_defective": float((ap.loc[ap["defective"], "shot_ts"] < START).mean()), "layer": {}}
+    for l in ("template_sort", "rules", "drift"):
+        out["layer"][l] = {}
+        for name, g in [("All defects", None)] + [(g, g) for g in GROUPS]:
+            mask = np.ones(len(ap), bool) if g is None else (ap["group"] == g).to_numpy()
+            out["layer"][l][name] = boot(ap[l].fillna(False).to_numpy(), ap["defective"].to_numpy(), ap["audit_id"].to_numpy(), rng, mask)
     return out
 
 
-def vent_check(df):
-    """End-of-fill CUSUM (deployed limit) against the burn rise, per vent-cleaning interval: the realism requirement."""
+def job_hour(s):
+    """Job-hour coverage (the earlier measure) and its chance level at the deployed thresholds: the share of confirmed
+    defects credited to a layer that alarmed on the job in the hour or shortly before, against the share of good audited
+    pieces whose job-hour would be credited under the same rules."""
+    from . import layers
+    sig = [(l, layers.hours(s[s[l]])) for l in ("template_sort", "rules", "drift", "virtual_metrology", "anomaly")]
     con = connect()
-    st = con.execute("select shot_id, cusum_eof_fire from drift_shot_state").df()
-    maint = con.execute("select mold_id, event_ts from stg_toolroom__mold_maintenance where event_type = 'vent_cleaning'").df()
+    defects = con.execute(f"""select source, job_id, press_id, mold_id, hour_ts, defect_code, qty from fct_confirmed_defects
+                              where source in ('sort', 'audit', 'tally') and job_id is not null
+                              and hour_ts >= '{START}' and hour_ts < '{END}'""").df()
+    good = con.execute(f"""select job_id, shot_ts from fct_audit_piece where linked_to_shot and after_approval and defect_code is null
+                           and shot_ts >= '{START}' and shot_ts < '{END}'""").df()
     con.close()
-    reg = pd.read_parquet(REF / "root_cause_register.parquet")
-    burns = reg[reg["defect_code"] == "burn"].groupby("shot_id").size()
-    pos = df[df["after_approval"]][["shot_id", "mold_id", "shot_ts"]].merge(st, on="shot_id")
-    pos["burn"] = pos["shot_id"].map(burns).fillna(0)
-    leads, n_int = [], 0
-    for m, g in pos.groupby("mold_id"):
-        if not g["cusum_eof_fire"].notna().any() or g["cusum_eof_fire"].fillna(False).sum() == 0 and g["burn"].sum() == 0:
-            continue
-        g = g.sort_values("shot_ts")
-        cl = maint[maint["mold_id"] == m]["event_ts"].sort_values()
-        edges = [pd.Timestamp.min] + list(cl) + [pd.Timestamp.max]
-        for a, b in zip(edges[:-1], edges[1:]):
-            iv = g[(g["shot_ts"] > a) & (g["shot_ts"] <= b)].reset_index(drop=True)
-            if len(iv) < 5000:
-                continue
-            n_int += 1
-            f = np.where(iv["cusum_eof_fire"].fillna(False).to_numpy(bool))[0]
-            roll = iv["burn"].rolling(1000, min_periods=1000).sum().to_numpy()
-            b0 = np.nanmean(roll[:3000]) if np.isfinite(roll[:3000]).any() else 0
-            rise = np.where(roll > max(3.0, 3 * b0))[0]
-            leads.append(dict(mold_id=m, fired=len(f) > 0, rise=len(rise) > 0,
-                              lead=int(rise[0] - f[0]) if len(f) and len(rise) else np.nan))
-    r = pd.DataFrame(leads)
-    lead = r["lead"]
-    return dict(intervals=int(n_int), with_rise=int(r["rise"].sum()), with_signal=int(r["fired"].sum()),
-                median_lead=float(lead.median()), positive_lead_share=float((lead > 0).sum() / max(n_int, 1)),
-                lead_2000_6000_share=float(((lead >= 2000) & (lead <= 6000)).sum() / max(n_int, 1)))
+    _, share, _ = layers.compare(defects, sig)
+    good["hour"] = pd.to_datetime(good["shot_ts"]).dt.floor("h")
+    hs = dict(sig)
+    keys = list(zip(good["job_id"], good["hour"]))
+    credited = [any((j, h - pd.Timedelta(hours=k)) in hs[l] for l in ("template_sort", "rules", "drift", "anomaly")
+                    for k in range(layers.LOOKBACK[l] + 1)) for j, h in keys]
+    return dict(detected=float(1 - share.get("none", 0)), chance=float(np.mean(credited)), share=share.to_dict(),
+                n_defects=int(defects["qty"].sum()), n_good=int(len(good)))
 
 
 def anomaly_events(df, s, bud):
@@ -242,10 +246,11 @@ def main():
     s, vd = shot_flags(df)
     out = {"period": [str(START.date()), str(END.date())], "warm": [str(WARM[0].date()), str(WARM[1].date())]}
     out["budget"] = budget(s)
+    out["budget"]["rules_at_textbook_limits"] = rules_at(s, 1.0)
     print("budget", json.dumps(out["budget"], default=float), flush=True)
     out["shot_level"] = shot_level(s, vd, rng)
-    out["drift_lead"] = drift_lead(df, rng)
-    out["vent_check"] = vent_check(df)
+    out["job_hour"] = job_hour(s)
+    out["context_15_months"] = context_15_months(df, rng)
     out["anomaly"] = anomaly_events(df, s, out["budget"])
     out["vm"] = vm_summary()
     (RESULTS / "measures.json").write_text(json.dumps(out, indent=1, default=str))

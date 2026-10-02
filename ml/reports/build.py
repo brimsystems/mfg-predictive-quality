@@ -6,6 +6,7 @@ Builds every HTML deliverable from the current run and publishes it under docs/.
   ML overview                   ml/reports/ml_overview.html
   ML technical report           ml/reports/ml_technical.html
   MLOps monitoring              ml/reports/monitoring_report.html
+  run reports                   ml/reports/run_report_<job>.html (the unit screen's job and a second run)
 
 Screenshots of the screen and the dashboard come from headless Chrome when it is installed.
 
@@ -16,10 +17,12 @@ import subprocess
 from pathlib import Path
 
 from analytics.reports import generate_dashboard
-from ml.reports import generate_ml_overview, generate_ml_technical, generate_monitoring_report, generate_unit_screen
+from ml.reports import (generate_ml_overview, generate_ml_technical, generate_monitoring_report, generate_run_report,
+                        generate_unit_screen)
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
+RUN_REPORTS = ["J-250165", "J-250191"]
 CHROME = [Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
           Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
           Path("/usr/bin/google-chrome"), Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")]
@@ -38,13 +41,15 @@ def screenshot(html, png, w=1400, h=1000):
 def main():
     for mod in (generate_unit_screen, generate_dashboard, generate_ml_overview, generate_ml_technical, generate_monitoring_report):
         mod.main()
+    generate_run_report.main(RUN_REPORTS)
     (DOCS / "reports").mkdir(parents=True, exist_ok=True)
     (DOCS / "screenshots").mkdir(parents=True, exist_ok=True)
     pages = {"unit_screen.html": ROOT / "ml/reports/unit_screen.html",
              "dashboard.html": ROOT / "analytics/reports/dashboard.html",
              "ml_overview.html": ROOT / "ml/reports/ml_overview.html",
              "ml_technical.html": ROOT / "ml/reports/ml_technical.html",
-             "monitoring_report.html": ROOT / "ml/reports/monitoring_report.html"}
+             "monitoring_report.html": ROOT / "ml/reports/monitoring_report.html",
+             **{f"run_report_{j}.html": ROOT / f"ml/reports/run_report_{j}.html" for j in RUN_REPORTS}}
     for name, src in pages.items():
         shutil.copy(src, DOCS / "reports" / name)
     screenshot(DOCS / "reports/unit_screen.html", DOCS / "screenshots/unit_screen.png", 1400, 1100)

@@ -34,15 +34,17 @@
       values to the MES, the resin lots, the setpoint log, the audits and the scrap tallies; runs the shop's control-chart rules on every shot;
       adds drift detection; and puts a predicted weight and dimension and an anomaly state on every shot.</p>
     <a class="card" href="reports/unit_screen.html"><div class="num">01</div><div class="title">Monitoring unit screen and shift chart</div>
-      <div class="desc">Cycle graph against template, summary values with bands, alarm and sort state, predicted weight and dimension, anomaly state; the shift chart, the alarm and sort log and the reject-bin review sheet.</div></a>
+      <div class="desc">One night shift on a medical mold: cycle graph against template, summary values with bands, predicted weight and dimension, anomaly state; the shift chart with an unrecorded hold-pressure change, the event log and cavity balance.</div></a>
     <a class="card" href="reports/dashboard.html"><div class="num">02</div><div class="title">Quality dashboard</div>
-      <div class="desc">Plant scrap by press, mold and code on all 24 presses; the cell's alarms by layer, drift signals, sort and false rejects, measurement error against gauge, label maturity and linkage coverage.</div></a>
+      <div class="desc">Plant scrap by press, mold and code on all 24 presses; the cell's alarms by layer, capability trend, the Pareto by period, false rejects over time, maintenance requests from drift, audit trends and measurement error against gauge.</div></a>
     <a class="card" href="reports/ml_overview.html"><div class="num">03</div><div class="title">ML overview</div>
-      <div class="desc">For the quality manager: what the units already caught, what charting every shot added, drift detection, the per-shot measurement, the supervised attempt, the anomaly layer, the layer comparison and the alarm budget.</div></a>
+      <div class="desc">For the quality manager: what the template detects against how often it flags good pieces, what the curve cannot see, and what each added layer adds on its own measure, at the deployed thresholds and the alarm budget.</div></a>
     <a class="card" href="reports/ml_technical.html"><div class="num">04</div><div class="title">ML technical report</div>
-      <div class="desc">The curve model and its mechanisms, sensor realism, label design, the realism checks, the feature pipeline, each model's evaluation and ablations, mechanism recovery.</div></a>
+      <div class="desc">The curve model and its mechanisms, sensor realism, label design, the realism checks, the feature pipeline, the SPC layer and drift tests, the rolling-origin evaluations, detection at the deployed thresholds, capability.</div></a>
     <a class="card" href="reports/monitoring_report.html"><div class="num">05</div><div class="title">MLOps monitoring</div>
-      <div class="desc">Label maturity, alarm-rate drift per layer, expected feature shifts after equipment events, and the per-shot measurement tracked against each audit with its retraining rule.</div></a>
+      <div class="desc">Label maturity, alarm-rate drift per layer, expected feature shifts after equipment events, and the per-shot measurement tracked against each audit between the monthly retrains.</div></a>
+    <a class="card" href="reports/run_report_J-250165.html"><div class="num">06</div><div class="title">Run report</div>
+      <div class="desc">The job record at close for J-250165 (and J-250191 under reports/): summary, first-shot approval, curve overlay, distributions, timeline, audit charts, capability, reject-bin review and the reaction log.</div></a>
     <div class="foot">Built from dbt marts on DuckDB; models tracked in MLflow. Source and pipeline in the repository.</div>
   </div>
 </body>

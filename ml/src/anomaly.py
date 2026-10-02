@@ -7,7 +7,7 @@ taken against the job's own recent shots (each value's change from the mean of t
 A job running steadily off its template is the template's and the charts' business;
 the anomaly layer looks for a shot that suddenly stops looking like its run. Fitted
 on validated training shots (after approval, no alarm, no linked defect) with the
-threshold set so 0.45% of the fit window is flagged.
+threshold set so the alarm state covers 0.30% of the fit window.
 
 Comparison: an autoencoder per mold x press on the retained curves (first
 post-gate sensor, resampled to 120 points over the cycle and scaled to the job's
@@ -20,7 +20,7 @@ from sklearn.neural_network import MLPRegressor
 
 from .features import CAVITY, DATA_DIR, connect
 
-FLAG_RATE = 0.0045
+FLAG_RATE = 0.003                # deployed: the alarm state covers 0.30% of validated shots, set for the alarm budget
 FIT_CAP = 60000
 CURVE_POINTS = 120
 

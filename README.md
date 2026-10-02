@@ -15,36 +15,46 @@ What the shop lacked was the connection. The units kept per-shot values for abou
 ## What was built
 
 1. **Data pipeline.** Fifteen months of the units' per-shot summaries (about 2.9 million sensor rows), a retained sample of curves at 100 readings per second (about 600 million rows), machine-side shot data from the presses, and the MES, ERP, QMS, materials, dryer and tool-room records, landed as Parquet and CSV and modeled in dbt on DuckDB. Every shot is aligned as of its timestamp to its job, template, resin lot, dryer, setpoints and maintenance counters.
-2. **SPC layer.** The units' template alarm logic recomputed and tested against their recorded state; individuals and moving-range charts on every shot with the QMS's Western Electric rules; EWMA and CUSUM drift detection with resets at approvals, corrections, vent cleaning, PM, ring replacement and lot changes; lot-change step tests.
-3. **Virtual metrology.** Audit part weight and critical dimension predicted from each shot's features, so every shot carries a measurement.
+2. **SPC layer.** The units' template alarm logic recomputed and tested against their recorded state; control-chart rules 1 and 2 on every shot, on AR(1) residuals at limits set for the alarm budget; EWMA and CUSUM drift detection with resets at approvals, corrections, vent cleaning, PM, ring replacement and lot changes, each tested against the mechanism it is built for.
+3. **Virtual metrology.** Audit part weight and critical dimension predicted from each shot's features, so every shot carries a measurement; retrained monthly.
 4. **Supervised defect prediction**, attempted against the template limits and reported as it landed.
-5. **Anomaly detection** for shots unlike anything validated: an isolation forest on the summary values, with a curve autoencoder as a comparison.
-6. **Deliverables.** The unit screen and shift chart, the quality dashboard, an ML overview for the quality manager, the technical report and the monitoring report.
+5. **Anomaly detection** for shots unlike anything validated: an isolation forest on the summary values, retrained monthly, with a curve autoencoder as a comparison.
+6. **Deliverables**, below.
+
+## Deliverables
+
+| Deliverable | For | What changed in this version |
+|---|---|---|
+| [Unit screen and shift chart](docs/reports/unit_screen.html) | Process technician | Reworked: a night shift on M-2119 with an unrecorded hold-pressure change, the variability signal that follows it, and the rules marked at their deployed limits |
+| [Run report](docs/reports/run_report_J-250165.html) | Quality engineer at job close | New: the per-job record (also [J-250191](docs/reports/run_report_J-250191.html)) |
+| [Quality dashboard](docs/reports/dashboard.html) | Quality engineer, weekly | Extended: capability trend, Pareto by period, false rejects over time, maintenance requests from drift, audit trends |
+| [ML overview](docs/reports/ml_overview.html) | Quality manager | Detection measured at the shot against good pieces, by layer and defect group, at the deployed thresholds |
+| [ML technical report](docs/reports/ml_technical.html) | Engineers | Thermal dimension and gradual novel faults, rolling-origin evaluation, drift tests, per-code detection |
+| [MLOps monitoring](docs/reports/monitoring_report.html) | Model owner | Monthly retraining and the investigation rule |
 
 ## Results
 
-Test period December 2025 to March 2026; models trained through September 2025 and validated on October and November; five seeds.
+Every layer is evaluated May 2025 to March 2026 at its deployed threshold. Virtual metrology and the anomaly model are retrained at the start of each month on all earlier data, so every month, including the summer of 2025, is out of sample. Detection is measured on audited pieces linked to their shot: the share of defective pieces whose shot a layer flagged, minus the share of good pieces from the same audits it flagged (the chance level), with 95% intervals.
 
-**Layer comparison.** Confirmed defective pieces (sort review, audits, packing tallies) credited at the job-hour grain to the layer that alarmed first in time on the job:
+| Layer | Deployed threshold | Episodes per shift | Detected above chance | Incremental |
+|---|---|---|---|---|
+| Template sort (the only layer that removes parts) | template alarm bands | 2.03 | +18.8 points | +18.8 |
+| Control-chart rules 1 and 2 | 4.05 and 2.70 sigma (12.1 episodes per shift at 3 and 2 sigma) | 1.03 | +9.3 | +0.9 |
+| Drift detection | standard limits, re-armed after 3,000 shots | 0.98 | +4.6 | 0.0 |
+| Anomaly detection | two of ten shots, threshold for 0.30% of validated shots | 0.73 | +4.2 | +0.1 |
+| Virtual metrology advisory | predicted dimension past 75% of tolerance | 1.09 | +3.2 | +1.2 |
 
-| Layer | Share of confirmed defects | Alarms per shift |
-|---|---|---|
-| Template alarms and sort | 47.6% | 2.21 alarm hours (sort is automatic) |
-| Control-chart rules 1 and 2 on every shot | +8.2 points | 0.96 |
-| Drift detection | +14.4 points | 0.60 |
-| Virtual metrology (dimensional codes) | +0.0 points | 0.08 |
-| Anomaly model | +4.0 points | 1.71 |
-| Caught by none | 25.8% | |
+The added layers raise 3.83 investigations per shift. The template detects fill-volume defects best (+49.8 points) and material defects not at all; 75% of defective audited pieces are flagged by no layer, mostly material, gate and flow-front defects the curve cannot see.
 
-The added layers (rules, drift, virtual metrology and the anomaly model) together raise 3.4 technician alarms per shift, inside the three to six one technician can investigate. Rules 4 and 5 are not deployed on every shot: cavity pressure values are autocorrelated from shot to shot, and rule 5 fires on 75% of points. Linkage coverage: 28% of confirmed defective pieces can be tied to a shot.
+**Virtual metrology** is a measurement on every shot: dimension error 2.39 times the gauge R&R (2.89 in the warm months, when mold temperature moves the part) and weight 1.35 times. Weight predictions can support stretching audit intervals; dimension predictions flag drift between audits but do not replace them. As an advisory it adds +8.8 points on packing and shrinkage defects and +31.0 on dimensional and warp defects in the warm months.
 
-**Virtual metrology** is the model that earns its place, because its labels are abundant (186,769 audited pieces, 88% linked to their shot). Pooled model on the test period: part weight RMSE 1.36 times the gauge R&R (R² 0.63), critical dimension 1.76 times (R² 0.85). Without the cavity pressure values the dimension error rises to 3.4 times gauge.
+**Drift detection**, tested on its mechanisms: the fill EWMA flags 59% of resin lot changes that step the fill integral against 15% of those that do not; the end-of-fill CUSUM fires before the burn rise no more often than chance, and the variance CUSUM cannot see check-ring wear present when a job starts.
 
-**Supervised defect prediction** does not beat the template limits on the common codes. At the template's own alarm rate it catches 83.0% of confirmed defective shots against 80.3%. It ranks sink (average precision 0.79 against 0.11) and dimensional defects (0.30 against 0.07) better than the band, and the rare codes have too few labels for anything usable.
+**Anomaly detection** flagged all 4 novel events in the period, 2 before the template; on the heater-zone failure it flagged before the template but after the shop had already responded.
 
-**Anomaly detection** flagged all six novel events in the fifteen months (a failing check ring, a failing heater zone, nozzle drool, a wrong material), at 0.5% of validated test shots; 81% of its flags fall on shots the template passed. The curve autoencoder did not separate the events from other retained curves.
+**Supervised defect prediction** gives no material gain over the template: 31.4% recall against 37.4% at the template's alarm rate, and 8.6% against 7.2% on audit-found defects only.
 
-The technical report lists every realism check on the extracts, including the 8 of 35 that fall outside their targets on this run, with their values.
+The technical report lists every realism check on the extracts, including the 9 of 35 that fall outside their targets on this run, with their values.
 
 ---
 
@@ -58,7 +68,8 @@ data_source/
   samples/             200-row samples of every extract
 data_pipeline/         dbt project: staging, intermediate, spc, marts; tests
 ml/
-  src/                 features, virtual metrology, supervised defect, anomaly, layers, run_all
+  src/                 features, virtual metrology, supervised defect, anomaly, rolling-origin evaluation,
+                       drift mechanism tests, measures, run_all
   reports/             report generators, shared style and results loader, build script
   tests/               as-of tests on the feature pipeline
 analytics/reports/     quality dashboard generator
@@ -87,4 +98,4 @@ python -m ml.src.run_all
 python -m ml.reports.build
 ```
 
-Generation takes about 25 minutes and writes about 1.4 GB of Parquet; the dbt build takes under two minutes; the models about 20 minutes. MLflow runs are logged to `ml/mlruns.db`.
+Generation takes about 30 minutes and writes about 1.2 GB of Parquet; the dbt build takes under two minutes; the models about an hour, most of it the monthly virtual metrology retrains. MLflow runs are logged to `ml/mlruns.db`.

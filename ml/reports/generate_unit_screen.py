@@ -1,10 +1,12 @@
 """
 The monitoring unit's screen for one shift: what the process technician sees at the press.
 
-Shift: job J-250188 (M-2118 on IM-11), shift B on 11 December 2025. A hold-pressure change at
-16:10 steps the pack integral up; the EWMA catches it at 16:13; the change is put back at 17:40;
-the pack-integral variability CUSUM fires at 17:42 because its 200-shot window spans both
-hold-pressure levels, not because the check ring changed.
+Shift: job J-250165 (M-2119 on IM-12), shift C, 22:00 on 12 September to 06:00 on 13 September 2025.
+A hold-pressure change at 01:11 with no reason recorded steps the pack integral up by most of a band;
+the template alarms on several shots, but the pack EWMA stays below its limit, which is set from the run's
+first 500 shots and so includes setup. The change is put back at 03:42, also unrecorded. The pack-integral
+variability CUSUM fires at 04:48 because its 200-shot window spans both hold-pressure levels, not because
+the check ring changed, and nothing reset it because neither change was logged as a correction.
 
 Panels are tagged by source: the monitoring unit (template), SPC, or a model.
 
@@ -18,13 +20,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ml.reports.style import fig, img  # noqa: E402
-from ml.src import vm  # noqa: E402
+from ml.reports import results as RS  # noqa: E402
 from ml.src.features import DATA_DIR, connect  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "unit_screen.html"
-JOB, T0 = "J-250188", pd.Timestamp("2025-12-11 14:00")
+JOB, T0 = "J-250165", pd.Timestamp("2025-09-12 22:00")
 T1 = T0 + pd.Timedelta(hours=8)
-SHIFT = "B"
+SHIFT = "C"
 C1, C4 = "#2E6FA7", "#C2571A"                 # cavity 1 and cavity 4, used everywhere on the screen
 DRIFT_TINT = "#DCE6F0"                          # neutral: never yellow, which means warning
 METRICS = [("cycle_integral", "Cycle integral (bar s)", "post_gate"), ("fill_integral", "Fill integral (bar s)", "post_gate"),
@@ -77,11 +79,9 @@ def load():
 
 
 def anomaly_alarm_shots(shots):
-    an = pd.read_parquet(DATA_DIR / "results" / "anomaly_if_scores.parquet")
-    an = an[an["seed"] == an["seed"].min()][["shot_id", "if_flag"]]
+    an = RS.anomaly_shots(shots["shot_id"])[["shot_id", "if_flag"]]
     f = shots[["shot_id", "shot_ts"]].merge(an, on="shot_id", how="left").sort_values("shot_ts")
-    f["if_flag"] = f["if_flag"].fillna(False).astype(bool)
-    f["unusual"] = f["if_flag"].rolling(10, min_periods=1).sum() >= 2
+    f["unusual"] = f["if_flag"].fillna(False).astype(bool)          # the alarm state: two flags in the last ten shots
     return f.set_index("shot_id")
 
 
@@ -105,10 +105,14 @@ def drift_episodes(D, cyc_of_ts):
     shaded lightly from its estimated start to detection and solidly from detection to the end of the shift."""
     eps = []
     ch = D["changes"]
+    cyc_s = float(D["shots"]["cycle_time_s"].median())
+    unrecorded = ch[ch["reason_code"].isna()]
+    detected_changes = set()
     for r in D["drift"].itertuples():
         before = ch[(ch["change_ts"] <= r.shot_ts) & (ch["change_ts"] >= r.shot_ts - pd.Timedelta(minutes=10))]
         if r.detector in ("ewma_pack", "ewma_fill") and len(before):
             c = before.iloc[-1]
+            detected_changes.add(c.change_ts)
             back = ch[(ch["change_ts"] > c.change_ts) & (ch["parameter"] == c.parameter) & (ch["new_value"] == c.old_value)]
             end_ts = back["change_ts"].min() if len(back) else T1
             what = "pack integral" if r.detector == "ewma_pack" else "fill integral"
@@ -117,19 +121,35 @@ def drift_episodes(D, cyc_of_ts):
                             label=f"Shift: {what} up after {c.parameter.replace('_bar', '').replace('_', ' ')} change",
                             log=f"Step change in the {what} after the {c.change_ts:%H:%M} {c.parameter.replace('_bar', '').replace('_', ' ')} change "
                                 f"({c.old_value:.0f} to {c.new_value:.0f}); in effect until {end_ts:%H:%M}"))
-        elif r.detector == "cusum_pack_var" and len(before):
+        elif r.detector == "cusum_pack_var" and len(unrecorded[(unrecorded["change_ts"] <= r.shot_ts)
+                                                                 & (unrecorded["change_ts"] >= r.shot_ts - pd.Timedelta(seconds=200 * cyc_s))]):
             eps.append(dict(kind="variability", detector=r.detector, det_cycle=r.cycle_no, det_ts=r.shot_ts,
                             start=r.cycle_no, end=r.cycle_no + 200, metric="pack_integral",
-                            label="Variability signal following setpoint change; detector not reset because the change had no reason recorded",
+                            label="Variability signal following setpoint change; detector not reset because the change was unrecorded",
                             log="Pack-integral variability signal: its 200-shot window spans both hold-pressure levels. "
                                 "Cushion and within-level spread unchanged, so not a check-ring signal. "
-                                "Detector not reset because the change had no reason recorded"))
+                                "Detector not reset because the change was unrecorded"))
         else:
             metric = {"ewma_pack": "pack_integral", "ewma_fill": "fill_integral", "cusum_eof": "end_of_fill_pressure_bar",
                       "cusum_gate_seal": "gate_seal_time_s", "cusum_pack_var": "pack_integral", "lot_step": "fill_integral"}[r.detector]
             eps.append(dict(kind="drift", detector=r.detector, det_cycle=r.cycle_no, det_ts=r.shot_ts, start=r.cycle_no - 150,
                             end=int(D["shots"]["cycle_no"].max()), metric=metric, label=f"Drift: {LABEL[metric].lower()}",
                             log=f"Drift onset: {r.detector.replace('_', ' ')}"))
+    # a pack-moving setpoint change no detector caught: shaded while in effect, so the chart shows what the EWMA missed
+    for c in unrecorded[unrecorded["parameter"] == "hold_pressure_bar"].itertuples():
+        if c.change_ts in detected_changes or c.old_value != c.old_value:
+            continue
+        back = ch[(ch["change_ts"] > c.change_ts) & (ch["parameter"] == c.parameter) & (ch["new_value"] == c.old_value)]
+        if not len(back):
+            continue
+        end_ts = back["change_ts"].min()
+        n_al = int(((D["shots"]["shot_ts"] >= c.change_ts) & (D["shots"]["shot_ts"] < end_ts) & (D["shots"]["unit_alarm_state"] == "alarm")).sum())
+        eps.append(dict(kind="step", detected=False, detector=None, det_cycle=cyc_of_ts(c.change_ts), det_ts=c.change_ts,
+                        start=cyc_of_ts(c.change_ts), end=cyc_of_ts(end_ts), metric="pack_integral",
+                        label="Pack integral up after hold pressure change (unrecorded); EWMA below its limit",
+                        log=f"Hold pressure {c.old_value:.0f} to {c.new_value:.0f} bar at {c.change_ts:%H:%M} with no reason recorded; "
+                            f"in effect until {end_ts:%H:%M}. Template alarms on {n_al} shots; the pack EWMA stays below its limit, "
+                            f"which is set from the run's first 500 shots and so includes setup"))
     return eps
 
 
@@ -237,15 +257,14 @@ def stack(D, eps, evs, unusual, gate_seal):
                     label=f"cavity {cav}: shots and EWMA" if metric == rows[0][0] else None)
             sp = D["spc"][(D["spc"]["sensor_id"] == sid) & (D["spc"]["metric"] == metric)]
             if len(sp):
-                c0, sg = sp["center"].iloc[0], sp["sigma"].iloc[0]
-                for k in (-3, 3):
-                    ax.axhline(c0 + k * sg, color=col, lw=0.9, ls="--", alpha=0.8)
+                # the rules act on each shot's residual from what the previous shot predicts, so no fixed line on the raw
+                # values corresponds to them; the markers show where they fired
                 sp = sp.assign(cyc=sp["shot_id"].map(cyc))
                 w1, w2 = sp[sp["we1"]], sp[sp["we2"] & ~sp["we1"]]
                 ax.scatter(w1["cyc"], w1["value"], marker="x", s=26, color="#B00020", zorder=5,
-                           label="beyond control limits (rule 1)" if metric == rows[0][0] and cav == 1 else None)
+                           label="rule 1: residual beyond 4.05 sigma" if metric == rows[0][0] and cav == 1 else None)
                 ax.scatter(w2["cyc"], w2["value"], marker="^", s=18, facecolor="none", edgecolor="#B00020", zorder=5,
-                           label="two of three beyond 2 sigma (rule 2)" if metric == rows[0][0] and cav == 1 else None)
+                           label="rule 2: two of three residuals beyond 2.70 sigma" if metric == rows[0][0] and cav == 1 else None)
             lo, hi = f"{metric}_alarm_low", f"{metric}_alarm_high"
             if lo in tpl.columns and pd.notna(tpl.loc[sid, lo]):
                 for v in (tpl.loc[sid, lo], tpl.loc[sid, hi]):
@@ -285,8 +304,8 @@ def stack(D, eps, evs, unusual, gate_seal):
         l += ll
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
-    h += [Line2D([], [], color="#555", ls="--"), Line2D([], [], color="#999", lw=0.7), Patch(color=DRIFT_TINT)]
-    l += ["control limits (first 500 shots after approval)", "alarm band edges (template)", "drift or shift interval"]
+    h += [Line2D([], [], color="#999", lw=0.7), Patch(color=DRIFT_TINT)]
+    l += ["alarm band edges (template)", "drift or shift interval"]
     axes[-1].legend(h, l, ncol=3, fontsize=7.5, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.45))
     return img(f, "shift chart")
 
@@ -370,8 +389,8 @@ def main():
         drift_txt = f"Drift: {what}, post-gate" + (" (following setpoint change)" if e["kind"] == "variability" else "")
 
     # virtual metrology
-    pw = vm.predict_shots(shots, "weight")
-    pdm = vm.predict_shots(shots, "dimension")
+    vp = RS.vm_shots(shots["shot_id"])                              # the rolling-origin model in force that month
+    pw, pdm = vp.rename(columns={"weight_pred": "y"}), vp.rename(columns={"dim_pred": "y"})
     act = shots.set_index("shot_id")["active_cavities"]
     pw, pdm = pw[pw["cavity_id"] <= pw["shot_id"].map(act)], pdm[pdm["cavity_id"] <= pdm["shot_id"].map(act)]
     w_now = (1 + pw[pw["shot_id"] == cur]["y"].mean()) * pa["nominal_weight_g"]
@@ -438,13 +457,13 @@ def main():
     for h, g in w.groupby(w["shot_ts"].dt.floor("h")):
         log.append((h, int(g["cycle_no"].iloc[0]), f"Warnings this hour: {len(g)}", "values in warning band, not sorted", "", ""))
     for e in eps:
-        log.append((e["det_ts"], e["det_cycle"], "Shift detected (SPC)" if e["kind"] == "step" else "Variability signal (SPC)" if e["kind"] == "variability" else "Drift onset (SPC)",
+        log.append((e["det_ts"], e["det_cycle"], ("Shift detected (SPC)" if e.get("detected", True) else "Setpoint change, not detected (SPC)") if e["kind"] == "step" else "Variability signal (SPC)" if e["kind"] == "variability" else "Drift onset (SPC)",
                     e["log"], "", ""))
     for e in eps:
         if e["end"] <= int(shots["cycle_no"].max()):
             ts_end = shots.loc[(shots["cycle_no"] - e["end"]).abs().idxmin(), "shot_ts"]
             why = ("setpoint put back" if e["kind"] == "step" else "window no longer spans the two hold-pressure levels" if e["kind"] == "variability" else "reset")
-            log.append((ts_end, e["end"], "Shift cleared (SPC)" if e["kind"] == "step" else "Signal cleared (SPC)", why, "", ""))
+            log.append((ts_end, e["end"], ("Shift cleared (SPC)" if e.get("detected", True) else "Setpoint put back") if e["kind"] == "step" else "Signal cleared (SPC)", why, "", ""))
     for c in D["changes"].itertuples():
         log.append((c.change_ts, cyc_of_ts(c.change_ts), "Setpoint change", f"{c.parameter.replace('_bar', '').replace('_', ' ')} {c.old_value:.0f} to {c.new_value:.0f} bar",
                     c.reason_code if isinstance(c.reason_code, str) else "", f"changed by {c.technician_id}"))
@@ -527,7 +546,7 @@ td.n{{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}} td
  <div class="panel"><h3>Shift chart · cavity 1 (blue) and cavity 4 (orange), shots and EWMA<span class="src spc">SPC</span></h3>
   <label class="toggle"><input type="checkbox" id="gs"> Add gate seal time</label>
   <div id="st4">{st4}</div><div id="st5" hidden>{st5}</div>
-  <p class="cap">The pack integral steps up after the 16:10 hold-pressure change and comes back when it is put back at 17:40; the later variability signal comes from a window that spans both levels.</p></div>
+  <p class="cap">The pack integral steps up after the 01:11 hold-pressure change and comes back when it is put back at 03:42. The template alarms on the highest shots, but the EWMA stays below its limit, which includes the run's setup. The variability signal at 04:48 comes from a window that spans both levels; nothing reset it because neither change was logged.</p></div>
  <div class="panel" style="margin-top:12px"><h3>Predicted critical dimension and hourly audits<span class="src model">Model: virtual metrology</span></h3>{vmt}
   <p class="cap">The predicted dimension stays inside tolerance through the shift and tracks the gauged audit pieces; dotted lines mark 75% of tolerance, where an audit is requested.</p></div>
  <div class="panel" style="margin-top:12px"><h3>Cavity balance · cavity 1 minus cavity 4<span class="src unit">Monitoring unit (template)</span></h3>{bal_png}

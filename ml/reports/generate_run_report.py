@@ -3,7 +3,7 @@ Run report: one printable page per completed job, for the quality engineer at jo
 customer record.
 
     from ml.reports.generate_run_report import run_report
-    html = run_report("J-250188")
+    html = run_report("J-250165")
 
 Usage: python ml/reports/generate_run_report.py [job_id ...]
 """
@@ -15,7 +15,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ml.reports.style import ACCENT, AMBER, BRAND_BLUE, GREY, RED, fig, img, pct  # noqa: E402
-from ml.src import vm  # noqa: E402
+from ml.reports import results as RS  # noqa: E402
 from ml.reports.generate_unit_screen import template_ref  # noqa: E402
 from ml.src.features import DATA_DIR, connect  # noqa: E402
 
@@ -111,12 +111,10 @@ def run_report(job_id):
                     where job_id = '{job_id}' and old_value is distinct from new_value order by change_ts""")
     maint = q(f"""select event_ts, event_type from stg_toolroom__mold_maintenance where mold_id = '{mold}'
                   and event_ts >= '{shots['shot_ts'].min()}' and event_ts <= '{shots['shot_ts'].max()}'""")
-    an = pd.read_parquet(DATA_DIR / "results" / "anomaly_if_scores.parquet")
-    an = an[an["seed"] == an["seed"].min()].set_index("shot_id")["if_flag"]
-    prod = prod.assign(if_flag=prod["shot_id"].map(an).fillna(False).astype(bool))
-    prod["unusual"] = prod["if_flag"].rolling(10, min_periods=1).sum() >= 2
+    an = RS.anomaly_shots(prod["shot_id"]).set_index("shot_id")["if_flag"]
+    prod["unusual"] = prod["shot_id"].map(an).fillna(False).astype(bool)   # the alarm state: two flags in the last ten shots
     unusual_on = prod["unusual"] & ~prod["unusual"].shift(1, fill_value=False)
-    pdm = vm.predict_shots(prod, "dimension")
+    pdm = RS.vm_shots(prod["shot_id"]).rename(columns={"dim_pred": "y"})
     pdm = pdm[pdm["cavity_id"] <= pdm["shot_id"].map(prod.set_index("shot_id")["active_cavities"])]
     pdm_shot = pdm.groupby("shot_id")["y"].mean()
     pdm_max = pdm.assign(a=pdm["y"].abs()).groupby("shot_id")["a"].max()
@@ -449,4 +447,4 @@ def main(jobs):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["J-250188"])
+    main(sys.argv[1:] or ["J-250165"])

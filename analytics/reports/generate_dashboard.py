@@ -98,9 +98,8 @@ def main():
     open_jobs = jobs[jobs["last_shot_ts"] >= snap - pd.Timedelta(days=7)]["job_id"]
     open_sig = last_seg[last_seg["job_id"].isin(open_jobs)].groupby("detector").size().rename("signals in jobs of the last 7 days")
 
-    vm = pd.read_csv(DATA_DIR / "results" / "vm_metrics_full.csv")
-    vm = (vm[vm["design"] == "pooled"].groupby(["target", "cell"])[["rmse", "gauge_sd", "rmse_over_gauge", "r2"]].mean()
-          .reset_index())
+    from ml.reports import results as RS
+    vm = RS.vm_by_cell(RS.load())[["target", "cell", "rmse", "gauge_sd", "rmse_over_gauge", "r2"]]
 
     mat = jobs.assign(state=np.where(jobs["is_matured"], "matured (21 days after last shot)", "provisional"))
     maturity = mat.groupby("state").size().rename("jobs").reset_index()
@@ -114,15 +113,15 @@ The cell's shot-level view follows below.</p>
 <h3>Highest-cost mold and press combinations</h3>
 {table(top_molds.rename(columns={"mold_id": "Mold", "press_id": "Press", "quantity_scrapped": "Pieces scrapped", "scrap_cost": "Scrap cost"}), {"Pieces scrapped": lambda v: f"{v:,.0f}", "Scrap cost": lambda v: f"${v:,.0f}"})}
 <h2 id="cell">Instrumented cell, IM-11 and IM-12</h2>
-<p>The template alarms and sort carry the week-to-week load; the control-chart rules and drift signals are the layers
-added on every shot. Rules 4 and 5 of the audit chart are not deployed on every shot (see the ML overview for why).</p>
+<p>The template alarms and sort carry the week-to-week load; the control-chart rules (at their deployed limits of 4.05 and 2.70 sigma) and drift
+signals are the layers added on every shot. Rules 4 and 5 of the audit chart are not deployed on every shot (see the ML overview for why).</p>
 {c4}
 <h3>Sort and false rejects by mold</h3>
 {table(sort_rev.assign(review_mode=sort_rev["review_mode"].map({"indexed_tray": "per shot (indexed tray)", "per_shift": "per shift"})).rename(columns={"mold_id": "Mold", "review_mode": "Review", "sorted_shots": "Sorted shots", "false_reject_share": "Sorted pieces found good"}), {"Sorted shots": lambda v: f"{v:,.0f}", "Sorted pieces found good": pct})}
 {cell_additions.build()}
 <h3>Drift signals open</h3>
 {table(open_sig.reset_index().rename(columns={'index': 'Detector', 'detector': 'Detector'}))}
-<h3>Virtual metrology error against gauge (test period, pooled model)</h3>
+<h3>Virtual metrology error against gauge (May 2025 to March 2026, model retrained monthly)</h3>
 {table(vm.rename(columns={"target": "Target", "cell": "Mold / press", "rmse": "RMSE", "gauge_sd": "Gauge sd", "rmse_over_gauge": "RMSE over gauge", "r2": "R2"}), {"RMSE": lambda v: f"{v:.4f}", "Gauge sd": lambda v: f"{v:.4f}", "RMSE over gauge": lambda v: f"{v:.2f}x", "R2": lambda v: f"{v:.2f}"})}
 <h3>Label maturity and linkage coverage</h3>
 {table(maturity.rename(columns={"state": "Label state", "jobs": "Jobs"}))}

@@ -6,7 +6,8 @@ earlier month (virtual metrology holds out the last earlier month for early stop
 so every prediction is out of sample and the test months include the summer of 2025.
 
   virtual metrology   pooled model, weight and dimension, with the ablation without cavity pressure values;
-                      per-piece metrics by month, and the predicted dimension of every shot and cavity (the advisory)
+                      per-piece metrics by month, and the predicted weight and dimension of every shot and cavity from
+                      the model in force that month (the advisory, the unit screen and the run reports read these)
   anomaly             isolation forest per mold x press, refitted monthly on validated earlier shots, its threshold
                       calibrated on those shots so the alarm state covers anomaly.FLAG_RATE of them
 
@@ -53,12 +54,13 @@ def run_vm(shots):
                                                    cell=te["cell"], shot_ts=te["shot_ts"], month=m0, target=kind,
                                                    measured=te[vm.TARGETS[kind][0]], predicted=p,
                                                    nominal=te[vm.TARGETS[kind][1]], tolerance=te["dimension_tolerance_mm"])))
-                    if kind == "dimension":
-                        shot_pred.append(vm.predict_shots(sh, kind, model, dict(features=f, cell_codes=codes)))
+                    shot_pred.append(vm.predict_shots(sh, kind, model, dict(features=f, cell_codes=codes)).assign(target=kind))
         print(f"  vm {m0:%Y-%m}: {len(te):,} audit pieces, {len(sh):,} shots", flush=True)
     pd.concat(metrics).to_csv(RESULTS / "rolling_vm_metrics.csv", index=False)
     pd.concat(preds).to_parquet(RESULTS / "rolling_vm_predictions.parquet", index=False)
-    pd.concat(shot_pred).rename(columns={"y": "dim_pred"}).to_parquet(RESULTS / "rolling_vm_shot_dimension.parquet", index=False)
+    sp = pd.concat(shot_pred).pivot_table(index=["shot_id", "cavity_id"], columns="target", values="y").reset_index()
+    # per shot and cavity, in target units: weight as a fraction of nominal, dimension in tolerance units
+    sp.rename(columns={"dimension": "dim_pred", "weight": "weight_pred"}).to_parquet(RESULTS / "rolling_vm_shot.parquet", index=False)
 
 
 def run_anomaly(df):
@@ -99,6 +101,26 @@ def run_anomaly(df):
     pd.DataFrame(thr_rows).to_csv(RESULTS / "rolling_anomaly_thresholds.csv", index=False)
 
 
+def run_autoencoder(df):
+    """The curve autoencoder, as a comparison only: fitted on validated retained curves before October 2025, its flag rate
+    on retained shots inside novel-event windows against the rest, over the evaluation months."""
+    import json
+    from . import anomaly_eval
+    ae = anomaly.autoencoder(df, seed=SEED)
+    ae.to_parquet(RESULTS / "anomaly_ae_scores.parquet", index=False)
+    ev = anomaly_eval.events()
+    ids = set()
+    for e in ev.itertuples():
+        ids |= set(range(int(e.min), int(e.max) + 1))
+    a = ae.merge(df[["shot_id", "shot_ts"]], on="shot_id")
+    a = a[(a["shot_ts"] >= MONTHS[0]) & (a["shot_ts"] < MONTHS[-1] + pd.DateOffset(months=1))]
+    a["in_event"] = a["shot_id"].isin(ids)
+    out = dict(event_shots=int(a["in_event"].sum()), event_flag_rate=float(a.loc[a["in_event"], "ae_flag"].mean()),
+               other_flag_rate=float(a.loc[~a["in_event"], "ae_flag"].mean()))
+    (RESULTS / "autoencoder_summary.json").write_text(json.dumps(out, indent=1))
+    print(out)
+
+
 def main(stages=("vm", "anomaly")):
     t0 = time.time()
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -109,6 +131,9 @@ def main(stages=("vm", "anomaly")):
     if "anomaly" in stages:
         print("rolling anomaly", flush=True)
         run_anomaly(df)
+    if "autoencoder" in stages:
+        print("curve autoencoder", flush=True)
+        run_autoencoder(df)
     print(f"done in {time.time() - t0:,.0f} s", flush=True)
 
 

@@ -99,7 +99,7 @@ CELL = dict(
 
     # ── Mechanisms ────────────────────────────────────────────────────────
     # G1 resin lot viscosity: log-viscosity per unit of log(MFI_nominal / MFI_true)
-    g1_visc_exp=1.5,
+    g1_visc_exp=1.0,
     # G2 vent restriction: rises per shot since cleaning, per mold
     vent_clean_shots={"M-2041": 26000, "M-2043": 26000, "M-2118": 16000, "M-2119": 16000,
                       "M-2260": 40000, "M-2301": 10000},

@@ -29,20 +29,20 @@ Test period December 2025 to March 2026; models trained through September 2025 a
 
 | Layer | Share of confirmed defects | Alarms per shift |
 |---|---|---|
-| Template alarms and sort | 60.6% | 2.28 alarm hours (sort is automatic) |
-| Control-chart rules 1 and 2 on every shot | +7.7 points | 0.82 |
-| Drift detection | +5.7 points | 0.62 |
-| Virtual metrology (dimensional codes) | +0.0 points | 0.03 |
-| Anomaly model | +1.4 points | 1.28 |
-| Caught by none | 24.5% | |
+| Template alarms and sort | 57.3% | 2.21 alarm hours (sort is automatic) |
+| Control-chart rules 1 and 2 on every shot | +8.3 points | 0.96 |
+| Drift detection | +5.6 points | 0.60 |
+| Virtual metrology (dimensional codes) | +0.0 points | 0.01 |
+| Anomaly model | +3.0 points | 1.71 |
+| Caught by none | 25.8% | |
 
-The deployed rules, drift signals and anomaly model together raise 2.7 technician alarms per shift. Rules 4 and 5 are not deployed on every shot: cavity pressure values are autocorrelated from shot to shot, and rule 5 fires on 71% of points. Linkage coverage: 31% of confirmed defective pieces can be tied to a shot.
+The deployed rules, drift signals and anomaly model together raise 3.3 technician alarms per shift, inside the three to six one technician can investigate. Rules 4 and 5 are not deployed on every shot: cavity pressure values are autocorrelated from shot to shot, and rule 5 fires on 75% of points. Linkage coverage: 28% of confirmed defective pieces can be tied to a shot.
 
-**Virtual metrology** is the model that earns its place, because its labels are abundant (185,441 audited pieces, 87% linked to their shot). Pooled model on the test period: part weight RMSE 1.39 times the gauge R&R (R² 0.62), critical dimension 1.81 times (R² 0.82). Without the cavity pressure values the dimension error rises to 3.2 times gauge.
+**Virtual metrology** is the model that earns its place, because its labels are abundant (186,769 audited pieces, 88% linked to their shot). Pooled model on the test period: part weight RMSE 1.36 times the gauge R&R (R² 0.63), critical dimension 1.76 times (R² 0.85). Without the cavity pressure values the dimension error rises to 3.4 times gauge.
 
-**Supervised defect prediction** does not beat the template limits on the common codes. At the template's own alarm rate it catches 89.1% of confirmed defective shots against 87.6%. It ranks sink (average precision 0.13 against 0.01) and dimensional defects (0.41 against 0.17) better than the band, and the rare codes have too few labels for anything usable.
+**Supervised defect prediction** does not beat the template limits on the common codes. At the template's own alarm rate it catches 83.0% of confirmed defective shots against 80.3%. It ranks sink (average precision 0.79 against 0.11) and dimensional defects (0.30 against 0.07) better than the band, and the rare codes have too few labels for anything usable.
 
-**Anomaly detection** flagged all six novel events in the fifteen months (a failing check ring, a failing heater zone, nozzle drool, a wrong material), at 0.5% of validated test shots; 76% of its flags fall on shots the template passed. The curve autoencoder did not separate the events from other retained curves.
+**Anomaly detection** flagged all six novel events in the fifteen months (a failing check ring, a failing heater zone, nozzle drool, a wrong material), at 0.5% of validated test shots; 81% of its flags fall on shots the template passed. The curve autoencoder did not separate the events from other retained curves.
 
 The technical report lists every realism check on the extracts, including the 8 of 35 that fall outside their targets on this run, with their values.
 

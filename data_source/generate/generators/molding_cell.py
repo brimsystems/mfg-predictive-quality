@@ -485,13 +485,14 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
             lvx = lv_g1 + lv_g5 - 0.012 * melt
             fl = 0.8 * lvx + g8_fill - 2.5 * leak + 0.94 * g3
             pk = -0.25 * lvx + hold + g3
-            rec = slice(max(r0, i - 200, since or 0), i)
+            rec = slice(max(r0, i - 200, since or 0, last_change[0]), i)
             if rec.stop - rec.start < 10 or r0 < 0:
                 return None                       # too few shots since the event to judge
             return (float(np.mean(fl[rec]) - np.mean(fl[r0:r0 + 60])),
                     float(np.mean(pk[rec]) - np.mean(pk[r0:r0 + 60])))
 
         tamper_done = {}
+        last_change = [0]
         for ci, kind, since in events:
             tamper = kind == "tamper"
             revert = kind == "revert"
@@ -537,6 +538,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                 d = direction * 0.03 * size; sw_delay[ci:] += d; g8_fill[ci:] += -0.3 * d
             elif param == "melt_temp_c":
                 d = (float(np.clip(prov_fill / 0.0096, -12, 12)) + rng.normal(0, 0.4)) if not tamper else direction * 3.0 * size
+                d = float(np.clip(melt[ci] + d, -12, 12) - melt[ci])      # melt stays inside the shop's window
                 melt[ci:] += d
             else:
                 d = direction * 1.0 * size; moldset[ci:] += d
@@ -545,6 +547,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                 reason = "unknown" if rng.random() > 0.68 else str(rng.choice(["defect_response", "drift_correction"]))
             else:
                 reason = "unknown" if rng.random() > 0.68 else ("defect_response" if kind == "lot_response" else "drift_correction")
+            last_change[0] = ci
             change_rows.append(dict(change_id=f"SC-{change_counter}", press_id=press, job_id=job,
                                     change_ts=pd.Timestamp(ts[ci]), parameter=param, old_value=0.0, new_value=float(d),
                                     technician_id=str(rng.choice(TECH_SHIFT[shift_of(pd.Timestamp(ts[ci]))])),
@@ -799,6 +802,8 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
         sink("machine", mach, m_id, pd.Timestamp(ts[0]))
 
         # ── Piece quality: weight, critical dimension, defects ──
+        # its own stream per run, so the quality model can change without reshuffling the process
+        qrng = np.random.default_rng(RANDOM_SEED * 100003 + r["run_no"])
         dv = pg[8]
         fill_d = np.nan_to_num(dv.get("fill_integral", np.zeros(n)))
         pack_d = np.nan_to_num(dv.get("pack_integral", np.zeros(n)))
@@ -828,7 +833,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                           for kk, v in contrib_fill.items()}}
 
         prod = idx >= approval_i
-        density_dev = rng.normal(0, 0.0006) + np.zeros(n)      # lot-level density, small
+        density_dev = qrng.normal(0, 0.0006) + np.zeros(n)      # lot-level density, small
         # shots the hourly audit samples from, and the first-shot approval shot
         hrs = (ts - ts[0]) / np.timedelta64(1, "h")
         audit_start = [approval_i] + [int(i) for i in np.searchsorted(hrs, np.arange(np.ceil(hrs[approval_i]), hrs[-1], LABELS["audit_every_h"]))]
@@ -837,7 +842,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
         for a0 in audit_start:
             if a0 >= n:
                 continue
-            size = int(rng.integers(*LABELS["audit_pieces"]))
+            size = int(qrng.integers(*LABELS["audit_pieces"]))
             n_sh = int(np.ceil(size / cav))
             audit_mask[a0:min(n, a0 + n_sh)] = True
             audit_plan.append((a0, size))
@@ -854,11 +859,12 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
             off = 0.0 if c in sensed else cav_dev[c - 1]
             fd, pd_, ed = fill_true + off, pack_true + off, eof_true + off
             p = {}
-            p["short_shot"] = 0.9 / (1 + np.exp((np.minimum(fd, ed) + 1.3) / 0.10))
-            xf = pd_ + 0.5 * peak_d
-            p["flash"] = 0.06 / (1 + np.exp(-(xf - 1.2) / 0.30)) + 0.45 / (1 + np.exp(-(xf - 1.7) / 0.12)) * (1 + mold_shots[m_id] / 2e6)
+            p["short_shot"] = 0.9 / (1 + np.exp((np.minimum(fd, ed) + 1.16) / 0.08))
+            # high peak pressure counts toward flash; a sensor spike is not the process
+            xf = pd_ + 0.8 * np.clip(np.where(spike_any, 0.0, peak_d), 0, None)
+            p["flash"] = 0.06 / (1 + np.exp(-(xf - 1.2) / 0.30)) + 0.35 / (1 + np.exp(-(xf - 1.30) / 0.10)) * (1 + mold_shots[m_id] / 2e6)
             thick = 3.5 if m_id == "M-2301" else (1.3 if m["housing"] else 1.0)
-            p["sink"] = 0.012 * thick / (1 + np.exp((pd_ + 1.0) / 0.40)) + 0.35 / (1 + np.exp((pd_ + 1.5) / 0.12))
+            p["sink"] = 0.012 * thick / (1 + np.exp((pd_ + 1.0) / 0.40)) + 0.30 / (1 + np.exp((pd_ + 1.22) / 0.10))
             p["void"] = 0.35 * p["sink"]
             p["weld_line"] = (0.030 * (2.0 if m["class_a"] else 1.0) / (1 + np.exp((ed + 0.85) / 0.30)) * (1 + np.clip(-melt / 5, 0, 2))
                               if m["weld_line"] else np.zeros(n))
@@ -878,25 +884,25 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
             # continuous quality: weight and critical dimension
             # weight: nominal x (1 + a x pack integral deviation from template + b x fill deviation)
             wt_true = (m["weight_g"] * (1 + 0.12 * pd_ * band_pack + 0.03 * fd * C["alarm_band"]["fill_integral"] + density_dev)
-                       + m["weight_g"] * cavity_offsets[m_id]["weight"][c - 1] + rng.normal(0, m["weight_g"] * 0.0014, n))
+                       + m["weight_g"] * cavity_offsets[m_id]["weight"][c - 1] + qrng.normal(0, m["weight_g"] * 0.0014, n))
             # critical dimension: shrinkage falls with pack integral and a later gate seal, rises with mold temperature
             dim_true = (dim_nom + tol * (0.37 * pd_ + 0.17 * gs_d - 0.035 * dT)
-                        + tol * cavity_offsets[m_id]["dim"][c - 1] + rng.normal(0, tol * 0.062, n))
+                        + tol * cavity_offsets[m_id]["dim"][c - 1] + qrng.normal(0, tol * 0.062, n))
             dim_bad = np.abs(dim_true - dim_nom) > tol
 
-            u = rng.random((n, len(CODES)))
+            u = qrng.random((n, len(CODES)))
             probs = np.vstack([p[k] + DEFECTS["base_rate"][k] for k in CODES]).T
             fired = (u < probs) & active[:, None]
             fired[:, CODES.index("dimensional")] |= dim_bad & active
             any_bad = fired.any(axis=1)
             for i in np.where(any_bad)[0]:
                 ks = np.where(fired[i])[0]
-                k = ks[0] if len(ks) == 1 else int(rng.choice(ks, p=probs[i, ks] / probs[i, ks].sum()))
+                k = ks[0] if len(ks) == 1 else int(qrng.choice(ks, p=probs[i, ks] / probs[i, ks].sum()))
                 code = CODES[k]
                 base = DEFECTS["base_rate"][code]
                 total = probs[i, k] if code != "dimensional" else 1.0
                 # attribute to a mechanism
-                if code != "dimensional" and rng.random() < base / max(total, 1e-12):
+                if code != "dimensional" and qrng.random() < base / max(total, 1e-12):
                     cause = "G0"
                 else:
                     if code in ("short_shot",):
@@ -932,7 +938,7 @@ def build_cell(sink, rng_seed_offset=0, max_runs=None, run_stride=1):
                         cause = "G0"
                     else:
                         keys = list(w)
-                        cause = keys[int(rng.choice(len(keys), p=np.array([w[kk] for kk in keys]) / tot))]
+                        cause = keys[int(qrng.choice(len(keys), p=np.array([w[kk] for kk in keys]) / tot))]
                 pieces_defects.append((int(shot_ids[i]), c, code, cause))
 
             # audit sample truth: weight and dimension for every piece (audits sample from these)
